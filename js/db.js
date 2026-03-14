@@ -14,10 +14,20 @@ const HISTORY_COL = "history";
 export async function saveQuestions(questionsArray) {
     const colRef = collection(db, QUESTIONS_COL);
     let count = 0;
+    
+    // Get current batch count to increment it
+    const statsRef = doc(db, STATS_COL, "global");
+    const statsDoc = await getDoc(statsRef);
+    let nextBatch = 1;
+    if (statsDoc.exists()) {
+        nextBatch = (statsDoc.data().batchCount || 0) + 1;
+    }
+
     for (const q of questionsArray) {
         const qId = q.id || `q_${Date.now()}_${count}`;
         await setDoc(doc(db, QUESTIONS_COL, qId), {
             ...q,
+            batchId: q.batchId || nextBatch,
             masteryCount: q.masteryCount || 0,
             attempts: q.attempts || 0,
             correctCount: q.correctCount || 0,
@@ -25,6 +35,10 @@ export async function saveQuestions(questionsArray) {
         }, { merge: true });
         count++;
     }
+
+    // Update global batch count
+    await setDoc(statsRef, { batchCount: nextBatch }, { merge: true });
+    
     return count;
 }
 
@@ -42,7 +56,7 @@ export async function getExamQuestions(limit = 30, category = 'all') {
     }
 
 
-    // Strategy: 1/3 Mastered (Count >= 5), 2/3 Others
+    // Strategy: 5% Mastered (Count >= 5) to minimize easy questions, 95% Others
     const mastered = allQuestions.filter(q => q.masteryCount >= 5);
     const practice = allQuestions.filter(q => q.masteryCount < 5);
 
@@ -50,8 +64,8 @@ export async function getExamQuestions(limit = 30, category = 'all') {
     const shuffledMastered = mastered.sort(() => 0.5 - Math.random());
     const shuffledPractice = practice.sort(() => 0.5 - Math.random());
 
-    // Select proportionally
-    const masteredTarget = Math.floor(limit / 3);
+    // Select proportionally (max 5% mastered to focus on new/weak areas)
+    const masteredTarget = Math.floor(limit * 0.05);
     const selectedMastered = shuffledMastered.slice(0, masteredTarget);
     const selectedPractice = shuffledPractice.slice(0, limit - selectedMastered.length);
 
@@ -78,14 +92,29 @@ export async function getDashboardStats(category = 'all') {
     const querySnapshot = await getDocs(colRef);
     let total = 0;
     let mastered = 0;
+    const batchSet = new Set();
+
     querySnapshot.forEach(doc => {
         const data = doc.data();
+        const id = doc.id;
+
+        // Extract batch from ID (e.g., sf_adm_batch008_q15 or sf_admin_001_v1)
+        const match = id.match(/batch(\d+)/) || id.match(/_v(\d+)$/);
+        if (match) {
+            batchSet.add(match[1]);
+        }
+
         if (category === 'all' || data.category === category) {
             total++;
             if (data.masteryCount >= 5) mastered++;
         }
     });
-    return { total, mastered };
+
+    return { 
+        total, 
+        mastered, 
+        batches: batchSet.size || 0 
+    };
 }
 
 
@@ -150,6 +179,64 @@ export async function getStrugglingQuestions() {
     });
     
     return struggling;
+}
+
+export async function updateStudyStats(secondsAdded) {
+    const statsRef = doc(db, STATS_COL, "user_experience");
+    const statsDoc = await getDoc(statsRef);
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+    let data = statsDoc.exists() ? statsDoc.data() : {
+        streak: 0,
+        lastStudyDate: "",
+        studyTimeByDate: {}
+    };
+
+    // Update Time Today
+    const currentTimeToday = (data.studyTimeByDate && data.studyTimeByDate[today]) ? data.studyTimeByDate[today] : 0;
+    const newTimeToday = currentTimeToday + secondsAdded;
+
+    // Update Streak
+    let newStreak = data.streak || 0;
+    if (data.lastStudyDate === yesterday) {
+        newStreak++;
+    } else if (data.lastStudyDate !== today) {
+        // If they missed a day, and it's not today, reset to 1
+        newStreak = 1;
+    }
+    // If lastStudyDate === today, streak stays the same
+
+    await setDoc(statsRef, {
+        streak: newStreak,
+        lastStudyDate: today,
+        studyTimeByDate: {
+            ...data.studyTimeByDate,
+            [today]: newTimeToday
+        }
+    }, { merge: true });
+
+    return { streak: newStreak, timeToday: newTimeToday };
+}
+
+export async function getExperienceStats() {
+    const statsRef = doc(db, STATS_COL, "user_experience");
+    const statsDoc = await getDoc(statsRef);
+    const today = new Date().toISOString().split('T')[0];
+
+    if (!statsDoc.exists()) return { streak: 0, timeToday: 0 };
+
+    const data = statsDoc.data();
+    const timeToday = (data.studyTimeByDate && data.studyTimeByDate[today]) ? data.studyTimeByDate[today] : 0;
+    
+    // Check if streak is still valid (if not today or yesterday, it's 0)
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    let streak = data.streak || 0;
+    if (data.lastStudyDate !== today && data.lastStudyDate !== yesterday) {
+        streak = 0;
+    }
+
+    return { streak, timeToday };
 }
 
 

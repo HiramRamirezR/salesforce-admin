@@ -6,6 +6,8 @@ let currentIndex = 0;
 let userAnswers = []; // { qIndex, selectedIndices, isCorrect }
 let timerInterval = null;
 let timeLeft = 52.5 * 60; // 52 minutes and 30 seconds
+let sessionStartTime = null; 
+let studyTicker = null;
 
 // --- DOM Elements ---
 const views = {
@@ -43,9 +45,18 @@ const liveStats = {
 
 // --- View Navigation ---
 function showView(viewName) {
+    // Save session time if leaving active mode
+    if (sessionStartTime) {
+        stopSessionTimer();
+    }
+
     Object.values(views).forEach(v => v.classList.add('hidden'));
     views[viewName].classList.remove('hidden');
     
+    if (viewName === 'exam' || viewName === 'study') {
+        startSessionTimer();
+    }
+
     if (viewName === 'exam') {
         document.getElementById('timer').classList.remove('hidden');
         liveStats.container.classList.remove('hidden');
@@ -56,12 +67,41 @@ function showView(viewName) {
 }
 
 
+function startSessionTimer() {
+    sessionStartTime = Date.now();
+    // Ticker to update UI every minute without DB calls, or just wait for save
+    studyTicker = setInterval(() => {
+        // UI only update could go here
+    }, 10000);
+}
+
+async function stopSessionTimer() {
+    if (!sessionStartTime) return;
+    const seconds = Math.floor((Date.now() - sessionStartTime) / 1000);
+    clearInterval(studyTicker);
+    sessionStartTime = null;
+    
+    if (seconds > 0) {
+        await DB.updateStudyStats(seconds);
+        // Refresh display if we are on home
+        if (!views.home.classList.contains('hidden')) loadDashboard();
+    }
+}
+
+
 // --- Dashboard Logic ---
 async function loadDashboard() {
     const stats = await DB.getDashboardStats();
+    const exp = await DB.getExperienceStats();
+
     document.getElementById('total-questions').textContent = stats.total;
     document.getElementById('mastered-count').textContent = stats.mastered;
+    document.getElementById('batches-count').textContent = stats.batches;
     
+    document.getElementById('study-streak').textContent = exp.streak;
+    const minsToday = Math.floor(exp.timeToday / 60);
+    document.getElementById('study-time-today').textContent = `${minsToday}m`;
+
     // Populate Categories Dropdown
     const categories = await DB.getUniqueCategories();
     const catSelect = document.getElementById('category-select');
@@ -121,8 +161,14 @@ async function renderGlobalMastery() {
 async function updateCategoryPool() {
     const cat = document.getElementById('category-select').value;
     const stats = await DB.getDashboardStats(cat);
+    const exp = await DB.getExperienceStats();
+
     document.getElementById('total-questions').textContent = stats.total;
     document.getElementById('mastered-count').textContent = stats.mastered;
+    document.getElementById('batches-count').textContent = stats.batches;
+    document.getElementById('study-streak').textContent = exp.streak;
+    const minsToday = Math.floor(exp.timeToday / 60);
+    document.getElementById('study-time-today').textContent = `${minsToday}m`;
 }
 
 
