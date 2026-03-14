@@ -1,0 +1,434 @@
+[
+    {
+        "id": "sf_admin_001_v1",
+        "category": "Security and Access",
+        "question": "An administrator needs to prevent users from deleting Accounts. Which feature should be used?",
+        "options": [
+            {
+                "text": "Profiles",
+                "isCorrect": true
+            },
+            {
+                "text": "Sharing Rules",
+                "isCorrect": false
+            },
+            {
+                "text": "Role Hierarchy",
+                "isCorrect": false
+            },
+            {
+                "text": "Queues",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Profiles control object permissions like Create, Read, Edit, and Delete."
+    },
+    {
+        "id": "sf_admin_001_v2",
+        "category": "Security and Access",
+        "question": "Users should be able to view Accounts but not delete them. Where should the admin configure this?",
+        "options": [
+            {
+                "text": "Profile object permissions",
+                "isCorrect": true
+            },
+            {
+                "text": "Organization-Wide Defaults",
+                "isCorrect": false
+            },
+            {
+                "text": "Sharing Rules",
+                "isCorrect": false
+            },
+            {
+                "text": "Role Hierarchy",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Delete access is controlled in object permissions within Profiles or Permission Sets."
+    },
+    {
+        "id": "sf_admin_001_v3",
+        "category": "Security and Access",
+        "question": "Which feature controls whether a user can delete records from an object?",
+        "options": [
+            {
+                "text": "Object permissions in Profiles",
+                "isCorrect": true
+            },
+            {
+                "text": "Field-Level Security",
+                "isCorrect": false
+            },
+            {
+                "text": "Sharing Rules",
+                "isCorrect": false
+            },
+            {
+                "text": "Public Groups",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Object-level permissions define what actions users can perform on records."
+    },
+    {
+        "id": "sf_admin_002_v1",
+        "category": "Security and Access",
+        "question": "Which two features can grant additional permissions to a user beyond their profile? (Choose 2)",
+        "options": [
+            {
+                "text": "Permission Sets",
+                "isCorrect": true
+            },
+            {
+                "text": "Permission Set Groups",
+                "isCorrect": true
+            },
+            {
+                "text": "Roles",
+                "isCorrect": false
+            },
+            {
+                "text": "Queues",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Permission Sets and Permission Set Groups add permissions without modifying the user's profile."
+    },
+    {
+        "id": "sf_admin_002_v2",
+        "category": "Security and Access",
+        "question": "A user needs temporary access to edit Opportunities. What should the administrator assign? (Choose 2)",
+        "options": [
+            {
+                "text": "Permission Set",
+                "isCorrect": true
+            },
+            {
+                "text": "Permission Set Group",
+                "isCorrect": true
+            },
+            {
+                "text": "New Role",
+                "isCorrect": false
+            },
+            {
+                "text": "Organization-Wide Default",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Permission Sets provide additional access without changing the user's base profile."
+    },
+    {
+        "id": "sf_admin_002_v3",
+        "category": "Security and Access",
+        "question": "Which two features help extend user permissions without changing profiles? (Choose 2)",
+        "options": [
+            {
+                "text": "Permission Sets",
+                "isCorrect": true
+            },
+            {
+                "text": "Permission Set Groups",
+                "isCorrect": true
+            },
+            {
+                "text": "Field History Tracking",
+                "isCorrect": false
+            },
+            {
+                "text": "Page Layouts",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Permission Sets are designed to extend permissions beyond what profiles provide."
+    },
+    {
+        "id": "sf_admin_003_v1",
+        "category": "Data Modeling and Management",
+        "question": "Which relationship type allows a child record to exist without a parent record?",
+        "options": [
+            {
+                "text": "Lookup Relationship",
+                "isCorrect": true
+            },
+            {
+                "text": "Master-Detail Relationship",
+                "isCorrect": false
+            },
+            {
+                "text": "External Relationship",
+                "isCorrect": false
+            },
+            {
+                "text": "Indirect Lookup",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Lookup relationships are optional and allow child records without a parent."
+    },
+    {
+        "id": "sf_admin_003_v2",
+        "category": "Data Modeling and Management",
+        "question": "A custom object should allow records even if no parent record exists. Which relationship should be used?",
+        "options": [
+            {
+                "text": "Lookup Relationship",
+                "isCorrect": true
+            },
+            {
+                "text": "Master-Detail Relationship",
+                "isCorrect": false
+            },
+            {
+                "text": "Hierarchical Relationship",
+                "isCorrect": false
+            },
+            {
+                "text": "External Relationship",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Lookup relationships allow independent records without requiring a parent."
+    },
+    {
+        "id": "sf_admin_003_v3",
+        "category": "Data Modeling and Management",
+        "question": "Which relationship type does NOT enforce parent record ownership or deletion?",
+        "options": [
+            {
+                "text": "Lookup Relationship",
+                "isCorrect": true
+            },
+            {
+                "text": "Master-Detail Relationship",
+                "isCorrect": false
+            },
+            {
+                "text": "Junction Object Relationship",
+                "isCorrect": false
+            },
+            {
+                "text": "External Lookup",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Lookup relationships are loosely coupled and do not enforce strict dependency."
+    },
+    {
+        "id": "sf_admin_004_v1",
+        "category": "Automation",
+        "question": "Which automation tool is recommended by Salesforce for building complex automation?",
+        "options": [
+            {
+                "text": "Flow Builder",
+                "isCorrect": true
+            },
+            {
+                "text": "Workflow Rules",
+                "isCorrect": false
+            },
+            {
+                "text": "Approval Processes",
+                "isCorrect": false
+            },
+            {
+                "text": "Escalation Rules",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Salesforce recommends Flow Builder as the primary automation tool."
+    },
+    {
+        "id": "sf_admin_004_v2",
+        "category": "Automation",
+        "question": "An admin wants to automatically update a field when a record is created. Which tool should be used?",
+        "options": [
+            {
+                "text": "Record-Triggered Flow",
+                "isCorrect": true
+            },
+            {
+                "text": "Role Hierarchy",
+                "isCorrect": false
+            },
+            {
+                "text": "Manual Sharing",
+                "isCorrect": false
+            },
+            {
+                "text": "Assignment Rules",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Record-triggered flows automate actions when records are created or updated."
+    },
+    {
+        "id": "sf_admin_004_v3",
+        "category": "Automation",
+        "question": "Which tool replaces most Workflow Rules and Process Builder automations?",
+        "options": [
+            {
+                "text": "Flow Builder",
+                "isCorrect": true
+            },
+            {
+                "text": "Formula Fields",
+                "isCorrect": false
+            },
+            {
+                "text": "Approval Process",
+                "isCorrect": false
+            },
+            {
+                "text": "Field History Tracking",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Flow Builder is the modern automation solution recommended by Salesforce."
+    },
+    {
+        "id": "sf_admin_005_v1",
+        "category": "User Setup",
+        "question": "Which two components are required to create a new user in Salesforce? (Choose 2)",
+        "options": [
+            {
+                "text": "Username",
+                "isCorrect": true
+            },
+            {
+                "text": "Profile",
+                "isCorrect": true
+            },
+            {
+                "text": "Role",
+                "isCorrect": false
+            },
+            {
+                "text": "Territory",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Every user must have a unique username and a profile."
+    },
+    {
+        "id": "sf_admin_005_v2",
+        "category": "User Setup",
+        "question": "An administrator is creating a new user. Which two fields are mandatory? (Choose 2)",
+        "options": [
+            {
+                "text": "Username",
+                "isCorrect": true
+            },
+            {
+                "text": "Profile",
+                "isCorrect": true
+            },
+            {
+                "text": "Role",
+                "isCorrect": false
+            },
+            {
+                "text": "Manager",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Username and Profile are required when creating a user."
+    },
+    {
+        "id": "sf_admin_005_v3",
+        "category": "User Setup",
+        "question": "Which two items must be defined before saving a new Salesforce user? (Choose 2)",
+        "options": [
+            {
+                "text": "Profile",
+                "isCorrect": true
+            },
+            {
+                "text": "Username",
+                "isCorrect": true
+            },
+            {
+                "text": "Role",
+                "isCorrect": false
+            },
+            {
+                "text": "Permission Set",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "A user cannot exist without a profile and a unique username."
+    },
+    {
+        "id": "sf_admin_006_v1",
+        "category": "Sales and Service Cloud Applications",
+        "question": "Which feature allows agents to access helpful articles when solving customer cases?",
+        "options": [
+            {
+                "text": "Knowledge",
+                "isCorrect": true
+            },
+            {
+                "text": "Forecasting",
+                "isCorrect": false
+            },
+            {
+                "text": "Campaigns",
+                "isCorrect": false
+            },
+            {
+                "text": "Territory Management",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Salesforce Knowledge provides articles to help agents resolve cases."
+    },
+    {
+        "id": "sf_admin_006_v2",
+        "category": "Sales and Service Cloud Applications",
+        "question": "A support team wants to store troubleshooting articles for agents. Which feature should they use?",
+        "options": [
+            {
+                "text": "Knowledge",
+                "isCorrect": true
+            },
+            {
+                "text": "Cases",
+                "isCorrect": false
+            },
+            {
+                "text": "Leads",
+                "isCorrect": false
+            },
+            {
+                "text": "Products",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Knowledge stores reusable articles for customer support."
+    },
+    {
+        "id": "sf_admin_006_v3",
+        "category": "Sales and Service Cloud Applications",
+        "question": "Which feature enables customer service agents to search for solutions to common issues?",
+        "options": [
+            {
+                "text": "Knowledge",
+                "isCorrect": true
+            },
+            {
+                "text": "Opportunities",
+                "isCorrect": false
+            },
+            {
+                "text": "Campaigns",
+                "isCorrect": false
+            },
+            {
+                "text": "Contracts",
+                "isCorrect": false
+            }
+        ],
+        "explanation": "Knowledge helps agents find solutions and documentation quickly."
+    }
+]
