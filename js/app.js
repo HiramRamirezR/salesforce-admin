@@ -13,10 +13,23 @@ const views = {
     import: document.getElementById('import-view'),
     exam: document.getElementById('exam-view'),
     history: document.getElementById('history-view'),
+    mistakes: document.getElementById('mistakes-view'),
     study: document.getElementById('study-view'),
     results: document.getElementById('results-view'),
     review: document.getElementById('review-view')
 };
+
+const OFFICIAL_WEIGHTS = {
+    "Data Modeling and Management": 17,
+    "Configuration and Setup": 15,
+    "Object Manager and Lightning App Builder": 15,
+    "Automation": 15,
+    "Sales and Marketing Applications": 10,
+    "Service and Support Applications": 10,
+    "Productivity and Collaboration": 10,
+    "Agentforce AI": 8
+};
+
 
 
 const liveStats = {
@@ -72,26 +85,38 @@ async function loadDashboard() {
 
 async function renderGlobalMastery() {
     const categories = await DB.getUniqueCategories();
+    const performance = await DB.getCategoryPerformance();
     const container = document.getElementById('mastery-bars-container');
     container.innerHTML = '';
 
     for (const cat of categories) {
         const stats = await DB.getDashboardStats(cat);
+        const weight = OFFICIAL_WEIGHTS[cat] || 0;
+        const perf = performance[cat] || { correct: 0, attempts: 0 };
+        const accuracy = perf.attempts > 0 ? Math.round((perf.correct / perf.attempts) * 100) : 0;
         const masteryLevel = stats.total > 0 ? Math.round((stats.mastered / stats.total) * 100) : 0;
         
         const div = document.createElement('div');
+        div.style.marginBottom = '20px';
         div.innerHTML = `
-            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px;">
-                <span>${cat}</span>
-                <span style="color: var(--primary); font-weight: 700;">${masteryLevel}% Mastered</span>
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px;">
+                <span>
+                    <strong>${cat}</strong> 
+                    <span style="color: var(--text-muted); font-size: 0.75rem;">(Weight: ${weight}%)</span>
+                </span>
+                <span style="color: var(--primary); font-weight: 700;">${masteryLevel}% Mastery</span>
             </div>
-            <div style="height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden;">
+            <div style="height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; margin-bottom: 4px;">
                 <div style="height: 100%; width: ${masteryLevel}%; background: var(--primary); transition: width 1s ease;"></div>
+            </div>
+            <div style="font-size: 0.75rem; color: ${accuracy < 65 ? 'var(--error)' : 'var(--success)'};">
+                Accuracy: ${accuracy}% ${accuracy < 65 ? '🚩 Struggle Area' : '✅ Trending Up'}
             </div>
         `;
         container.appendChild(div);
     }
 }
+
 
 async function updateCategoryPool() {
     const cat = document.getElementById('category-select').value;
@@ -105,7 +130,10 @@ async function updateCategoryPool() {
 async function startExam() {
     const lengthSelect = document.getElementById('exam-length-select');
     const mode = lengthSelect.value;
-    const totalToFetch = mode === 'survival' ? 100 : (parseInt(lengthSelect.value) || 30);
+    let totalToFetch = 30;
+    
+    if (mode === 'survival' || mode === 'simulation') totalToFetch = 65;
+    else totalToFetch = parseInt(mode) || 30;
     
     const catSelect = document.getElementById('category-select');
     const selectedCategory = catSelect.value;
@@ -121,12 +149,16 @@ async function startExam() {
     userAnswers = [];
     
     if (mode === 'survival') {
-        timeLeft = 0; // Infinite or just no timer
+        timeLeft = 0;
         document.getElementById('timer').classList.add('hidden');
+    } else if (mode === 'simulation') {
+        timeLeft = 105 * 60; // Official 105 mins
+        document.getElementById('timer').classList.remove('hidden');
     } else {
         timeLeft = Math.floor(currentQuestions.length * 1.75 * 60);
         document.getElementById('timer').classList.remove('hidden');
     }
+
     
     updateLiveStats();
     if (mode !== 'survival') startTimer();
@@ -193,20 +225,24 @@ async function validateAnswer(isMultiple) {
     if (selectedElements.length === 0) return;
 
     const q = currentQuestions[currentIndex];
+    const mode = document.getElementById('exam-length-select').value;
     const correctAnswers = q.options.filter(o => o.isCorrect).map(o => o.text);
     const selectedAnswers = Array.from(selectedElements).map(el => el.querySelector('span').textContent);
 
     const isCorrect = correctAnswers.length === selectedAnswers.length && 
                       correctAnswers.every(val => selectedAnswers.includes(val));
 
-    // UI Feedback
-    document.querySelectorAll('.option-item').forEach(el => {
-        const text = el.querySelector('span').textContent;
-        if (correctAnswers.includes(text)) el.classList.add('correct');
-        else if (selectedAnswers.includes(text)) el.classList.add('error');
-    });
+    // UI Feedback (Hidden in simulation until the end)
+    if (mode !== 'simulation') {
+        document.querySelectorAll('.option-item').forEach(el => {
+            const text = el.querySelector('span').textContent;
+            if (correctAnswers.includes(text)) el.classList.add('correct');
+            else if (selectedAnswers.includes(text)) el.classList.add('error');
+        });
+    }
 
     userAnswers.push({ qIndex: currentIndex, isCorrect, explanation: q.explanation });
+
 
     // Update Live Stats
     updateLiveStats();
@@ -215,8 +251,8 @@ async function validateAnswer(isMultiple) {
     await DB.updateMastery(q.id, isCorrect);
 
     // Survival Check
-    const mode = document.getElementById('exam-length-select').value;
     if (mode === 'survival' && !isCorrect) {
+
         setTimeout(() => {
             alert("☠️ SURVIVAL ENDED: One mistake and you're out!");
             endExam();
@@ -242,17 +278,31 @@ async function endExam() {
     const score = userAnswers.filter(a => a.isCorrect).length;
     const total = currentQuestions.length;
     const percentage = Math.round((score / total) * 100);
+    const mode = document.getElementById('exam-length-select').value;
     
     // Save to Firestore History
     await DB.saveExamResult({
         score,
         total,
         percentage,
+        mode,
         date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString()
     });
 
+    const badge = document.getElementById('simulation-badge');
+    if (mode === 'simulation') {
+        badge.classList.remove('hidden');
+        const passed = percentage >= 65;
+        badge.style.background = passed ? 'var(--success)' : 'var(--error)';
+        badge.textContent = passed ? 'SIMULATION: PASS ✅' : 'SIMULATION: FAIL ❌';
+        document.getElementById('result-message').textContent = passed ? "You're ready for the real deal!" : "Close! Review your weak areas.";
+    } else {
+        badge.classList.add('hidden');
+        document.getElementById('result-message').textContent = percentage >= 80 ? "Certified Ready! 🚀" : "Keep practicing, Trailblazer!";
+    }
+
     document.getElementById('final-percentage').textContent = `${percentage}%`;
-    document.getElementById('result-message').textContent = percentage >= 80 ? "Certified Ready! 🚀" : "Keep practicing, Trailblazer!";
+
     
     // Save to local for avg
     const pastScores = JSON.parse(localStorage.getItem('sf_scores') || '[]');
@@ -316,21 +366,64 @@ function renderReview() {
 }
 
 // --- Event Listeners ---
-document.getElementById('start-exam-btn').onclick = startExam;
-document.getElementById('start-study-btn').onclick = startStudy;
-document.getElementById('go-to-import').onclick = () => showView('import');
-document.getElementById('go-to-history').onclick = loadHistory;
-document.getElementById('history-back-home').onclick = () => showView('home');
-document.getElementById('back-to-home').onclick = () => showView('home');
-document.getElementById('view-review').onclick = renderReview;
-document.getElementById('category-select').onchange = updateCategoryPool;
-document.getElementById('show-answer-btn').onclick = () => {
+const setupBtn = (id, fn) => {
+    const el = document.getElementById(id);
+    if (el) el.onclick = fn;
+};
+
+setupBtn('start-exam-btn', startExam);
+setupBtn('start-study-btn', startStudy);
+setupBtn('go-to-mistakes', loadMistakeBank);
+setupBtn('mistakes-back-home', () => showView('home'));
+setupBtn('go-to-import', () => showView('import'));
+setupBtn('go-to-history', loadHistory);
+setupBtn('history-back-home', () => showView('home'));
+setupBtn('back-to-home', () => showView('home'));
+setupBtn('view-review', renderReview);
+
+const catSelect = document.getElementById('category-select');
+if (catSelect) catSelect.onchange = updateCategoryPool;
+
+
+async function loadMistakeBank() {
+    showView('mistakes');
+    const container = document.getElementById('mistakes-list');
+    container.innerHTML = '<p class="text-center">Analyzing your struggles...</p>';
+    
+    const struggling = await DB.getStrugglingQuestions();
+    container.innerHTML = '';
+    
+    if (struggling.length === 0) {
+        container.innerHTML = '<p class="text-center">No mistakes found yet! Keep it up. 🌟</p>';
+        return;
+    }
+
+    struggling.forEach(q => {
+        const div = document.createElement('div');
+        div.className = 'card';
+        div.style.marginBottom = '12px';
+        div.innerHTML = `
+            <span class="category-tag">${q.category}</span>
+            <p style="font-weight: 700; margin: 10px 0;">${q.question}</p>
+            <div class="explanation-box" style="font-size: 0.85rem;">
+                <strong>Explanation:</strong> ${q.explanation}
+            </div>
+            <div style="font-size: 0.75rem; color: var(--error); margin-top: 10px;">
+                Mastery: ${q.masteryCount}/5 hits | Attempts: ${q.attempts}
+            </div>
+        `;
+        container.appendChild(div);
+    });
+}
+
+setupBtn('show-answer-btn', () => {
     document.getElementById('study-answer-area').classList.remove('hidden');
     document.getElementById('show-answer-btn').classList.add('hidden');
-};
-document.getElementById('study-pass-btn').onclick = () => nextStudyCard(true);
-document.getElementById('study-fail-btn').onclick = () => nextStudyCard(false);
-document.getElementById('exit-study-btn').onclick = () => showView('home');
+});
+setupBtn('study-pass-btn', () => nextStudyCard(true));
+setupBtn('study-fail-btn', () => nextStudyCard(false));
+setupBtn('exit-study-btn', () => showView('home'));
+
 
 async function startStudy() {
     const cat = document.getElementById('category-select').value;
@@ -415,8 +508,7 @@ async function loadHistory() {
     });
 }
 
-document.getElementById('import-submit').onclick = async () => {
-
+setupBtn('import-submit', async () => {
     try {
         const json = JSON.parse(document.getElementById('json-input').value);
         const count = await DB.saveQuestions(json);
@@ -427,14 +519,16 @@ document.getElementById('import-submit').onclick = async () => {
     } catch (e) {
         alert("Invalid JSON format. Please check your data.");
     }
-};
+});
 
-document.getElementById('reset-stats').onclick = () => {
+
+setupBtn('reset-stats', () => {
     if (confirm("Are you sure? This will delete all local scores and reset counts.")) {
         localStorage.removeItem('sf_scores');
         location.reload();
     }
-};
+});
+
 
 // Initial Load
 loadDashboard();

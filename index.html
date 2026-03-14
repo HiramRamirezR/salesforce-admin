@@ -64,16 +64,22 @@
                             <option value="30" selected>Standard (30 Qs)</option>
                             <option value="60">Full Simulation (60 Qs)</option>
                             <option value="survival">☠️ Survival Mode</option>
+                            <option value="simulation">🎓 Official Simulation (65 Qs)</option>
                         </select>
+
                     </div>
                 </div>
 
                 <div style="display: flex; gap: 12px; flex-wrap: wrap;">
                     <button class="btn-primary" id="start-exam-btn">Start Practice Session</button>
                     <button class="btn-outline" id="start-study-btn" style="border-color: var(--warning); color: var(--warning);">⚡ Study Flashcards</button>
+                    <button class="btn-outline" id="go-to-mistakes" style="border-color: var(--error); color: var(--error);">🔥 Mistake Bank</button>
                     <button class="btn-outline" id="go-to-import">Import</button>
                     <button class="btn-outline" id="go-to-history">History</button>
+                    <button class="btn-outline" id="reset-stats" style="border-color: var(--error); color: var(--error); opacity: 0.6; font-size: 0.7rem;">Reset Progress</button>
                 </div>
+
+
 
 
                 <!-- PADRE FEATURE: Mastery Breakdown -->
@@ -94,11 +100,25 @@
                     <button class="btn-outline" id="history-back-home" style="padding: 6px 12px; font-size: 0.8rem;">Back</button>
                 </div>
                 <div id="history-list" style="display: flex; flex-direction: column; gap: 12px;">
-                    <!-- History items will be injected here -->
                     <p class="text-center" style="color: var(--text-muted);">Loading history...</p>
                 </div>
             </div>
         </section>
+
+        <!-- MISTAKE BANK VIEW -->
+        <section id="mistakes-view" class="hidden">
+            <div class="card">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <h2>🔥 Mistake Bank</h2>
+                    <button class="btn-outline" id="mistakes-back-home" style="padding: 6px 12px; font-size: 0.8rem;">Back</button>
+                </div>
+                <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 0.9rem;">Clean these up! Questions appear here if you failed them and haven't mastered them yet (5 correct hits).</p>
+                <div id="mistakes-list" style="display: flex; flex-direction: column; gap: 16px;">
+                    <!-- Mistake items injected here -->
+                </div>
+            </div>
+        </section>
+
 
 
         <!-- IMPORT VIEW -->
@@ -140,8 +160,10 @@
         <!-- RESULTS VIEW -->
         <section id="results-view" class="hidden">
             <div class="card text-center">
+                <div id="simulation-badge" class="hidden" style="display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 0.8rem; font-weight: 800; margin-bottom: 12px; text-transform: uppercase;">Simulation</div>
                 <h1 style="font-size: 3rem; margin-bottom: 8px;" id="final-percentage">0%</h1>
                 <p style="font-size: 1.25rem; font-weight: 600; margin-bottom: 24px;" id="result-message">Great effort!</p>
+
                 
                 <div id="category-report" style="text-align: left; margin-bottom: 30px;">
                     <h3 style="margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">Breakdown by Category</h3>

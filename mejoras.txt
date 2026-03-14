@@ -1,0 +1,360 @@
+# Mejoras recomendadas para la app de estudio de Salesforce Admin
+
+Estas mejoras están pensadas para convertir tu aplicación de **quiz de preguntas** en una **plataforma real de preparación para aprobar la certificación Salesforce Certified Administrator**.
+
+---
+
+# 1. Mapa del examen (Study Roadmap)
+
+La app debería mostrar las áreas que evalúa el examen y el progreso del usuario en cada una.
+
+Áreas típicas del examen:
+
+* Data & Analytics Management — 17%
+* Configuration & Setup — 15%
+* Object Manager & Lightning App Builder — 15%
+* Automation — 15%
+* Sales & Marketing — 10%
+* Service & Support — 10%
+* Productivity & Collaboration — 10%
+* Agentforce AI — 8%
+
+Visualmente podría mostrarse como barras de progreso.
+
+Ejemplo:
+
+```
+Study Progress
+
+Data & Analytics        40%
+Security                65%
+Automation              25%
+Reports                 80%
+Service Cloud           10%
+```
+
+Esto permite al usuario saber **qué temas necesita estudiar más**.
+
+---
+
+# 2. Sistema de detección de áreas débiles (Weak Areas)
+
+La aplicación debería detectar en qué temas el usuario falla más.
+
+Ejemplo de resultado:
+
+```
+You are struggling with:
+
+• Sharing Rules
+• Role Hierarchy
+• Flow vs Validation Rules
+• Report Types
+```
+
+Después permitir un modo:
+
+```
+Practice Mode → Only Weak Areas
+```
+
+Esto enfoca el estudio donde realmente se necesita.
+
+---
+
+# 3. Explicaciones educativas (Mini clase)
+
+Actualmente el quiz solo indica si la respuesta es correcta.
+
+Se recomienda agregar:
+
+* explicación del concepto
+* cuándo se usa
+* cuándo NO se usa
+
+Ejemplo:
+
+Pregunta:
+
+Opportunities are Private. Managers need visibility into their team's opportunities.
+
+Respuesta correcta:
+
+Role Hierarchy
+
+Explicación:
+
+```
+Concept:
+
+OWD → baseline access
+Role Hierarchy → managers see records below them
+Sharing Rules → horizontal sharing
+
+Rule:
+Manager visibility → Role Hierarchy
+Cross-team sharing → Sharing Rules
+```
+
+Esto transforma el quiz en **herramienta de aprendizaje real**.
+
+---
+
+# 4. Modo simulador de examen real
+
+Agregar un modo que simule exactamente el examen.
+
+Parámetros del examen:
+
+* 60–65 preguntas
+* 105 minutos
+* Passing score: 65%
+
+Ejemplo de pantalla inicial:
+
+```
+Start Real Exam Simulation
+```
+
+Resultado final:
+
+```
+Score: 72%
+
+Weak Areas
+• Security model
+• Case automation
+• Reports
+```
+
+Esto ayuda a preparar la experiencia real del examen.
+
+---
+
+# 5. Modo escenarios (Scenario Mode)
+
+Muchas preguntas del examen son largas y basadas en empresas ficticias.
+
+Ejemplo típico:
+
+```
+Universal Containers wants sales managers
+to see opportunities owned by their teams
+but not other teams.
+
+OWD = Private.
+
+What should the admin configure?
+```
+
+Agregar un modo especial para este tipo de preguntas ayuda a entrenar para el examen real.
+
+---
+
+# 6. Flashcards de conceptos
+
+Agregar un modo de estudio rápido basado en conceptos clave.
+
+Ejemplo:
+
+```
+Concept: OWD
+Definition: Baseline record access
+
+Concept: Permission Set
+Definition: Additional permissions
+
+Concept: Flow
+Definition: Automation tool
+```
+
+Esto sirve para repasar rápidamente antes del examen.
+
+---
+
+# 7. Preguntas similares automáticas
+
+Cuando el usuario falla una pregunta, ofrecer más preguntas del mismo concepto.
+
+Ejemplo:
+
+```
+You missed: Sharing Rules
+
+Practice 5 more questions about:
+Sharing Rules
+```
+
+Esto acelera mucho el aprendizaje.
+
+---
+
+# 8. Modo "Admin Thinking"
+
+Después de responder una pregunta, pedir al usuario identificar qué tipo de problema era.
+
+Ejemplo:
+
+```
+Why is this correct?
+
+A) Security model  
+B) Automation  
+C) Data management  
+D) UI configuration
+```
+
+Esto entrena el pensamiento necesario para responder correctamente en el examen.
+
+---
+
+# 9. Ampliar el banco de preguntas
+
+Asegurarse de cubrir completamente los temas más comunes del examen.
+
+## Security Model (muy importante)
+
+* OWD
+* Role Hierarchy
+* Sharing Rules
+* Profiles
+* Permission Sets
+* Manual Sharing
+* Field Level Security
+
+---
+
+## Automation
+
+* Flow
+* Validation Rules
+* Approval Process
+* Workflow Rules
+
+---
+
+## Data Management
+
+* Data Import Wizard
+* Data Loader
+* Lookup vs Master Detail
+* Roll-up Summary
+
+---
+
+## Reports & Dashboards
+
+* Report Types
+* Filters
+* Dashboards
+* Joined Reports
+
+---
+
+## Sales Cloud
+
+* Leads
+* Accounts
+* Contacts
+* Opportunities
+* Products
+* Price Books
+
+---
+
+## Service Cloud
+
+* Cases
+* Case Assignment Rules
+* Entitlements
+* Knowledge
+
+---
+
+# 10. Explicaciones simples tipo "Explain Like I'm 5"
+
+Agregar una explicación simplificada para ayudar a memorizar.
+
+Ejemplo:
+
+```
+Sharing Rule = compartir registros entre equipos
+Role Hierarchy = los jefes ven los datos de su equipo
+Permission Set = permisos extra para usuarios
+```
+
+Esto ayuda mucho para recordar conceptos durante el examen.
+
+---
+
+# 11. Dashboard de progreso personal
+
+Mostrar métricas de aprendizaje.
+
+Ejemplo:
+
+```
+Questions Answered: 320
+Accuracy: 68%
+
+Best Topics:
+Reports
+Accounts
+
+Needs Improvement:
+Security
+Automation
+```
+
+Esto motiva al usuario y ayuda a enfocar el estudio.
+
+---
+
+# 12. Historial de preguntas falladas
+
+Guardar las preguntas que el usuario respondió incorrectamente.
+
+Modo sugerido:
+
+```
+Review Mistakes
+```
+
+Para repasar errores antes del examen.
+
+---
+
+# 13. Sistema de niveles de estudio
+
+Ejemplo:
+
+```
+Level 1 — Basic Concepts  
+Level 2 — Intermediate Questions  
+Level 3 — Scenario Questions  
+Level 4 — Exam Simulation  
+```
+
+Esto crea una progresión de aprendizaje.
+
+---
+
+# Conclusión
+
+Actualmente la app funciona como:
+
+**Un quiz de preguntas.**
+
+Con estas mejoras se convertiría en:
+
+**Una plataforma completa de preparación para Salesforce Admin Certification.**
+
+Beneficios:
+
+* aprendizaje dirigido
+* detección de debilidades
+* simulación real del examen
+* repaso de conceptos clave
+* entrenamiento con escenarios
+
+Esto aumentaría significativamente la probabilidad de aprobar el examen.

@@ -15,17 +15,19 @@ export async function saveQuestions(questionsArray) {
     const colRef = collection(db, QUESTIONS_COL);
     let count = 0;
     for (const q of questionsArray) {
-        // We use a specific ID if provided, otherwise firebase generates one
         const qId = q.id || `q_${Date.now()}_${count}`;
         await setDoc(doc(db, QUESTIONS_COL, qId), {
             ...q,
-            masteryCount: 0,
+            masteryCount: q.masteryCount || 0,
+            attempts: q.attempts || 0,
+            correctCount: q.correctCount || 0,
             lastUpdated: new Date()
         }, { merge: true });
         count++;
     }
     return count;
 }
+
 
 export async function getExamQuestions(limit = 30, category = 'all') {
     const colRef = collection(db, QUESTIONS_COL);
@@ -60,16 +62,16 @@ export async function getExamQuestions(limit = 30, category = 'all') {
 
 export async function updateMastery(questionId, isCorrect) {
     const qRef = doc(db, QUESTIONS_COL, questionId);
+    const updates = {
+        attempts: increment(1)
+    };
     if (isCorrect) {
-        await updateDoc(qRef, {
-            masteryCount: increment(1)
-        });
-    } else {
-        // If wrong, reset or decrease? User said "acertarla 5 veces". 
-        // Let's just not increment if wrong. Or we could reset to 0 to be stricter?
-        // Let's just keep it as "correct count" for now.
+        updates.masteryCount = increment(1);
+        updates.correctCount = increment(1);
     }
+    await updateDoc(qRef, updates);
 }
+
 
 export async function getDashboardStats(category = 'all') {
     const colRef = collection(db, QUESTIONS_COL);
@@ -116,5 +118,39 @@ export async function getUniqueCategories() {
     });
     return Array.from(categories).sort();
 }
+
+export async function getCategoryPerformance() {
+    const colRef = collection(db, QUESTIONS_COL);
+    const querySnapshot = await getDocs(colRef);
+    const performance = {};
+    
+    querySnapshot.forEach(doc => {
+        const data = doc.data();
+        const cat = data.category || "General";
+        if (!performance[cat]) performance[cat] = { total: 0, correct: 0, attempts: 0 };
+        performance[cat].total++;
+        performance[cat].correct += (data.correctCount || 0);
+        performance[cat].attempts += (data.attempts || 0);
+    });
+    
+    return performance;
+}
+
+export async function getStrugglingQuestions() {
+    const colRef = collection(db, QUESTIONS_COL);
+    const querySnapshot = await getDocs(colRef);
+    const struggling = [];
+    
+    querySnapshot.forEach(doc => {
+        const data = doc.data();
+        // A question is struggling if attempts > 0 and masteryCount < 5
+        if ((data.attempts || 0) > 0 && (data.masteryCount || 0) < 5) {
+            struggling.push({ id: doc.id, ...data });
+        }
+    });
+    
+    return struggling;
+}
+
 
 
