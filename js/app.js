@@ -124,12 +124,6 @@ async function loadDashboard() {
         catSelect.appendChild(opt);
     });
 
-    const pastScores = JSON.parse(localStorage.getItem('sf_scores') || '[]');
-    if (pastScores.length > 0) {
-        const avg = pastScores.reduce((a, b) => a + b, 0) / pastScores.length;
-        document.getElementById('avg-score').textContent = `${Math.round(avg)}%`;
-    }
-
     renderGlobalMastery();
 }
 
