@@ -7,8 +7,24 @@ const db = getFirestore(app);
 
 // Collection Names
 const QUESTIONS_COL = "questions";
+const MASTERY_COL = "mastery_units"; 
 const STATS_COL = "stats"; 
 const HISTORY_COL = "history";
+
+// Local Cache system to stay within Spark Plan (Free)
+let cachedUnits = null;
+
+async function getCachedUnits() {
+    if (cachedUnits) return cachedUnits;
+    const colRef = collection(db, MASTERY_COL);
+    const snapshot = await getDocs(colRef);
+    cachedUnits = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    return cachedUnits;
+}
+
+export function clearCache() {
+    cachedUnits = null;
+}
 
 
 export async function saveQuestions(questionsArray) {
@@ -88,32 +104,21 @@ export async function updateMastery(questionId, isCorrect) {
 
 
 export async function getDashboardStats(category = 'all') {
-    const colRef = collection(db, QUESTIONS_COL);
-    const querySnapshot = await getDocs(colRef);
+    const units = await getCachedUnits();
     let total = 0;
     let mastered = 0;
-    const batchSet = new Set();
 
-    querySnapshot.forEach(doc => {
-        const data = doc.data();
-        const id = doc.id;
-
-        // Extract batch from ID (e.g., sf_adm_batch008_q15 or sf_admin_001_v1)
-        const match = id.match(/batch(\d+)/) || id.match(/_v(\d+)$/);
-        if (match) {
-            batchSet.add(match[1]);
-        }
-
+    units.forEach(data => {
         if (category === 'all' || data.category === category) {
             total++;
-            if (data.masteryCount >= 5) mastered++;
+            if (data.status === 'mastered') mastered++;
         }
     });
 
     return { 
         total, 
         mastered, 
-        batches: batchSet.size || 0 
+        batches: Math.ceil(total / 10) 
     };
 }
 
@@ -240,4 +245,96 @@ export async function getExperienceStats() {
 }
 
 
+
+// MASTERY SYSTEM FUNCTIONS
+
+export async function saveMasteryUnits(units) {
+    let count = 0;
+    for (const unit of units) {
+        const docRef = doc(db, MASTERY_COL, unit.id);
+        await setDoc(docRef, {
+            ...unit,
+            masteryProgress: 0, // 0 to 5
+            attempts: 0,
+            status: 'locked', // locked, learning, practicing, mastered
+            lastAttempt: null
+        }, { merge: true });
+        count++;
+    }
+    return count;
+}
+
+export async function getUnitsByTopic(topic) {
+    const colRef = collection(db, MASTERY_COL);
+    const q = topic === 'all' 
+        ? query(colRef)
+        : query(colRef, where("category", "==", topic));
+        
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+export async function updateUnitMastery(unitId, isMasteryPoint) {
+    const docRef = doc(db, MASTERY_COL, unitId);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+        const data = docSnap.data();
+        let newProgress = data.masteryProgress || 0;
+        
+        if (isMasteryPoint) {
+            newProgress = Math.min(newProgress + 1, 5);
+        } else {
+            // Penalización moderada: si falla, baja 2 puntos para asegurar re-estudio
+            newProgress = Math.max(newProgress - 2, 0);
+        }
+
+        const newStatus = newProgress >= 5 ? 'mastered' : 'practicing';
+        
+        await updateDoc(docRef, {
+            masteryProgress: newProgress,
+            status: newStatus,
+            attempts: increment(1),
+            lastAttempt: new Date()
+        });
+        
+        return { newProgress, newStatus };
+    }
+}
+
+export async function updateUnitStatus(unitId, newStatus) {
+    const docRef = doc(db, MASTERY_COL, unitId);
+    await updateDoc(docRef, { status: newStatus });
+}
+
+// Official weights definition
+const OFFICIAL_WEIGHTS = {
+    "Data & Analytics Management": 17,
+    "Configuration & Setup": 15,
+    "Object Manager & Lightning App Builder": 15,
+    "Automation": 15,
+    "Sales & Marketing": 10,
+    "Service & Support": 10,
+    "Productivity & Collaboration": 10,
+    "Agentforce AI": 8
+};
+
+export async function getExamMasteryProgress() {
+    const units = await getCachedUnits();
+    const progress = {};
+    
+    Object.keys(OFFICIAL_WEIGHTS).forEach(cat => {
+        progress[cat] = { total: 0, mastered: 0, weight: OFFICIAL_WEIGHTS[cat] };
+    });
+
+    units.forEach(data => {
+        const cat = data.category;
+        if (progress[cat]) {
+            progress[cat].total++;
+            if (data.status === 'mastered') progress[cat].mastered++;
+        }
+    });
+    
+    return progress;
+}
 

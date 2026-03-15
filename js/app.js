@@ -1,4 +1,5 @@
 import * as DB from './db.js';
+import { evaluateMastery } from './ai-evaluator.js';
 
 // --- State Management ---
 let currentQuestions = [];
@@ -18,7 +19,8 @@ const views = {
     mistakes: document.getElementById('mistakes-view'),
     study: document.getElementById('study-view'),
     results: document.getElementById('results-view'),
-    review: document.getElementById('review-view')
+    review: document.getElementById('review-view'),
+    masteryPractice: document.getElementById('mastery-practice-view')
 };
 
 const OFFICIAL_WEIGHTS = {
@@ -96,21 +98,29 @@ async function loadDashboard() {
 
     document.getElementById('total-questions').textContent = stats.total;
     document.getElementById('mastered-count').textContent = stats.mastered;
-    document.getElementById('batches-count').textContent = stats.batches;
     
     document.getElementById('study-streak').textContent = exp.streak;
     const minsToday = Math.floor(exp.timeToday / 60);
     document.getElementById('study-time-today').textContent = `${minsToday}m`;
 
-    // Populate Categories Dropdown
-    const categories = await DB.getUniqueCategories();
+    // Populate Categories Dropdown with Official Topics
+    const officialTopics = [
+        "Data & Analytics Management",
+        "Configuration & Setup",
+        "Object Manager & Lightning App Builder",
+        "Automation",
+        "Sales & Marketing",
+        "Service & Support",
+        "Productivity & Collaboration",
+        "Agentforce AI"
+    ];
+    
     const catSelect = document.getElementById('category-select');
-    // Keep the "All" option and add others
-    catSelect.innerHTML = '<option value="all">All Categories (Mixed)</option>';
-    categories.forEach(cat => {
+    catSelect.innerHTML = '<option value="all">All Topics (Mixed)</option>';
+    officialTopics.forEach(topic => {
         const opt = document.createElement('option');
-        opt.value = cat;
-        opt.textContent = cat;
+        opt.value = topic;
+        opt.textContent = topic;
         catSelect.appendChild(opt);
     });
 
@@ -124,37 +134,48 @@ async function loadDashboard() {
 }
 
 async function renderGlobalMastery() {
-    const categories = await DB.getUniqueCategories();
-    const performance = await DB.getCategoryPerformance();
+    const masteryStats = await DB.getExamMasteryProgress();
     const container = document.getElementById('mastery-bars-container');
     container.innerHTML = '';
 
-    for (const cat of categories) {
-        const stats = await DB.getDashboardStats(cat);
-        const weight = OFFICIAL_WEIGHTS[cat] || 0;
-        const perf = performance[cat] || { correct: 0, attempts: 0 };
-        const accuracy = perf.attempts > 0 ? Math.round((perf.correct / perf.attempts) * 100) : 0;
-        const masteryLevel = stats.total > 0 ? Math.round((stats.mastered / stats.total) * 100) : 0;
+    // Official topics in order
+    const topics = [
+        "Data & Analytics Management",
+        "Configuration & Setup",
+        "Object Manager & Lightning App Builder",
+        "Automation",
+        "Sales & Marketing",
+        "Service & Support",
+        "Productivity & Collaboration",
+        "Agentforce AI"
+    ];
+
+    topics.forEach(cat => {
+        const stats = masteryStats[cat] || { total: 0, mastered: 0, weight: 0 };
+        const masteryPerc = stats.total > 0 ? Math.round((stats.mastered / stats.total) * 100) : 0;
+        const isLoaded = stats.total > 0;
         
         const div = document.createElement('div');
         div.style.marginBottom = '20px';
+        div.style.opacity = isLoaded ? '1' : '0.4';
         div.innerHTML = `
             <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px;">
                 <span>
                     <strong>${cat}</strong> 
-                    <span style="color: var(--text-muted); font-size: 0.75rem;">(Weight: ${weight}%)</span>
+                    <span style="color: var(--text-muted); font-size: 0.75rem;">(Weight: ${stats.weight || 0}%)</span>
+                    ${isLoaded ? ' <span style="color: var(--success); font-size: 0.7rem;">[LOADED]</span>' : ' <span style="color: var(--error); font-size: 0.7rem;">[EMPTY]</span>'}
                 </span>
-                <span style="color: var(--primary); font-weight: 700;">${masteryLevel}% Mastery</span>
+                <span style="color: var(--warning); font-weight: 700;">${masteryPerc}% Mastered</span>
             </div>
-            <div style="height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; margin-bottom: 4px;">
-                <div style="height: 100%; width: ${masteryLevel}%; background: var(--primary); transition: width 1s ease;"></div>
+            <div style="height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; margin-bottom: 4px; border: 1px solid ${isLoaded ? 'var(--warning)' : 'var(--border)'};">
+                <div style="height: 100%; width: ${masteryPerc}%; background: linear-gradient(90deg, var(--warning), #ffcc00); transition: width 1s ease;"></div>
             </div>
-            <div style="font-size: 0.75rem; color: ${accuracy < 65 ? 'var(--error)' : 'var(--success)'};">
-                Accuracy: ${accuracy}% ${accuracy < 65 ? '🚩 Struggle Area' : '✅ Trending Up'}
+            <div style="font-size: 0.7rem; color: var(--text-muted);">
+                ${isLoaded ? `${stats.mastered} of ${stats.total} scenarios conquered` : 'No scenarios imported yet'}
             </div>
         `;
         container.appendChild(div);
-    }
+    });
 }
 
 
@@ -472,36 +493,64 @@ setupBtn('exit-study-btn', () => showView('home'));
 
 
 async function startStudy() {
-    const cat = document.getElementById('category-select').value;
-    currentQuestions = await DB.getExamQuestions(100, cat); // Get a lot for studying
-    if (currentQuestions.length === 0) {
-        alert("No questions to study!");
+    const topic = document.getElementById('category-select').value;
+    // We use the same source as Mastery Practice
+    masteryUnits = await DB.getUnitsByTopic(topic);
+    
+    if (masteryUnits.length === 0) {
+        alert("No units found to study. Please import your JSON first!");
         return;
     }
-    currentIndex = 0;
+    
+    masteryIndex = 0;
     showView('study');
     renderStudyCard();
 }
 
 function renderStudyCard() {
-    const q = currentQuestions[currentIndex];
-    document.getElementById('study-category').textContent = q.category;
-    document.getElementById('study-question').textContent = q.question;
-    document.getElementById('study-explanation').textContent = q.explanation;
+    const unit = masteryUnits[masteryIndex];
+    document.getElementById('study-category').textContent = unit.category;
+    document.getElementById('study-question').textContent = `Concept: ${unit.concept}`;
+    
+    // Detailed educational content
+    const expBox = document.getElementById('study-explanation');
+    
+    // UNLOCK THE UNIT: When viewed in Flashcards, it becomes 'learning'
+    if (unit.status === 'locked') {
+        DB.updateUnitStatus(unit.id, 'learning').then(() => {
+            unit.status = 'learning';
+            DB.clearCache(); // Ensure next fetch gets the 'learning' status
+        });
+    }
+    expBox.innerHTML = `
+        <div style="margin-bottom: 15px;">
+            <strong style="color: var(--primary);">Definition:</strong><br>
+            ${unit.flashcard.definition}
+        </div>
+        <div style="margin-bottom: 15px;">
+            <strong style="color: var(--warning);">Use Cases:</strong>
+            <ul style="margin-top: 5px; padding-left: 18px; font-size: 0.9rem;">
+                ${unit.flashcard.useCases.map(uc => `<li>${uc}</li>`).join('')}
+            </ul>
+        </div>
+        <div>
+            <strong style="color: var(--success);">ELI5 (Simple):</strong><br>
+            <span style="font-style: italic; font-size: 0.9rem;">"${unit.flashcard.ELI5}"</span>
+        </div>
+    `;
     
     document.getElementById('study-answer-area').classList.add('hidden');
     document.getElementById('show-answer-btn').classList.remove('hidden');
 }
 
-async function nextStudyCard(isCorrect) {
-    const q = currentQuestions[currentIndex];
-    await DB.updateMastery(q.id, isCorrect);
-    
-    currentIndex++;
-    if (currentIndex < currentQuestions.length) {
+async function nextStudyCard(isMasteryAction) {
+    // If user clicks "Got it", we could optionally increment progress, 
+    // but for now let's just move to the next card to study.
+    masteryIndex++;
+    if (masteryIndex < masteryUnits.length) {
         renderStudyCard();
     } else {
-        alert("Study session complete! You've gone through all available questions.");
+        alert("Study session complete!");
         showView('home');
         loadDashboard();
     }
@@ -556,16 +605,132 @@ async function loadHistory() {
 
 setupBtn('import-submit', async () => {
     try {
-        const json = JSON.parse(document.getElementById('json-input').value);
-        const count = await DB.saveQuestions(json);
-        alert(`Successfully imported ${count} questions!`);
+        const text = document.getElementById('json-input').value;
+        const json = JSON.parse(text);
+        
+        // Detect if it's Mastery Units or Regular Questions
+        if (json.length > 0 && json[0].hardQuestion) {
+            const count = await DB.saveMasteryUnits(json);
+            DB.clearCache(); // Force re-fetch on next dashboard load
+            alert(`Successfully imported ${count} Mastery units!`);
+        } else {
+            const count = await DB.saveQuestions(json);
+            alert(`Successfully imported ${count} regular questions!`);
+        }
+        
         document.getElementById('json-input').value = '';
         showView('home');
         loadDashboard();
     } catch (e) {
         alert("Invalid JSON format. Please check your data.");
+        console.error(e);
     }
 });
+
+// --- MASTERY PRACTICE LOGIC ---
+let currentMasteryUnit = null;
+let masteryUnits = [];
+let masteryIndex = 0;
+
+async function startMasteryPractice() {
+    const topic = document.getElementById('category-select').value;
+    let allUnits = await DB.getUnitsByTopic(topic);
+    
+    // FILTER: Only units that are NOT 'locked'
+    // They must have been reviewed via Flashcards first
+    masteryUnits = allUnits.filter(u => u.status !== 'locked' && u.status !== 'mastered');
+
+    if (masteryUnits.length === 0) {
+        const totalLockedInTopic = allUnits.filter(u => u.status === 'locked').length;
+        if (totalLockedInTopic > 0) {
+            alert(`You have ${totalLockedInTopic} units locked. Please study them via Flashcards first!`);
+        } else {
+            alert("No units to practice in this category.");
+        }
+        return;
+    }
+    
+    // In "all", shuffle and pick limit
+    if (topic === 'all') {
+        masteryUnits = masteryUnits.sort(() => 0.5 - Math.random()).slice(0, 10);
+    }
+
+    masteryIndex = 0;
+    showView('masteryPractice');
+    renderMasteryScenario();
+}
+
+function renderMasteryScenario() {
+    currentMasteryUnit = masteryUnits[masteryIndex];
+    
+    document.getElementById('mp-category').textContent = currentMasteryUnit.category;
+    document.getElementById('mp-text').textContent = currentMasteryUnit.hardQuestion;
+    document.getElementById('mp-answer').value = '';
+    
+    // Reset feedback area
+    const feedbackArea = document.getElementById('mp-feedback-area');
+    feedbackArea.classList.add('hidden');
+    
+    document.getElementById('mp-submit-btn').classList.remove('hidden');
+    document.getElementById('mp-next-btn').classList.add('hidden');
+}
+
+async function submitMasteryAnswer() {
+    const userAnswer = document.getElementById('mp-answer').value.trim();
+    if (!userAnswer) return;
+
+    const submitBtn = document.getElementById('mp-submit-btn');
+    submitBtn.disabled = true;
+    submitBtn.textContent = "AI is thinking...";
+
+    try {
+        const result = await evaluateMastery(userAnswer, currentMasteryUnit);
+        
+        // Update DB
+        await DB.updateUnitMastery(currentMasteryUnit.id, result.masteryIncrement);
+
+        // Show Feedback
+        const feedbackArea = document.getElementById('mp-feedback-area');
+        const scoreBadge = document.getElementById('mp-score-badge');
+        const feedbackText = document.getElementById('mp-feedback-text');
+        const missingTerms = document.getElementById('mp-missing-terms');
+
+        feedbackArea.classList.remove('hidden');
+        scoreBadge.textContent = `Score: ${result.score}%`;
+        scoreBadge.style.background = result.isCorrect ? 'var(--success)' : 'var(--error)';
+        scoreBadge.style.color = 'black';
+        
+        feedbackText.textContent = result.feedback;
+        
+        if (result.missingTerms && result.missingTerms.length > 0) {
+            missingTerms.textContent = `Missing terms: ${result.missingTerms.join(", ")}`;
+        } else {
+            missingTerms.textContent = '';
+        }
+
+        submitBtn.classList.add('hidden');
+        document.getElementById('mp-next-btn').classList.remove('hidden');
+    } catch (e) {
+        alert("Error evaluating answer: " + e.message);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Validate with IA";
+    }
+}
+
+setupBtn('start-mastery-btn', startMasteryPractice);
+setupBtn('mp-submit-btn', submitMasteryAnswer);
+setupBtn('mp-next-btn', () => {
+    masteryIndex++;
+    if (masteryIndex < masteryUnits.length) {
+        renderMasteryScenario();
+    } else {
+        alert("Mastery session complete!");
+        showView('home');
+        location.reload(); // Refresh to see new mastery bars
+    }
+});
+setupBtn('mp-exit-btn', () => showView('home'));
 
 
 setupBtn('reset-stats', () => {

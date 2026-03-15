@@ -44,20 +44,12 @@
                         <span class="stat-label">Total Pool</span>
                     </div>
                     <div class="stat-item">
-                        <span class="stat-value" id="batches-count">0</span>
-                        <span class="stat-label">Batches</span>
-                    </div>
-                    <div class="stat-item">
                         <span class="stat-value" id="study-streak">0</span>
                         <span class="stat-label">🔥 Streak</span>
                     </div>
                     <div class="stat-item">
                         <span class="stat-value" id="study-time-today">0m</span>
                         <span class="stat-label">Time Today</span>
-                    </div>
-                    <div class="stat-item">
-                        <span class="stat-value" id="avg-score">0%</span>
-                        <span class="stat-label">Avg. Score</span>
                     </div>
                 </div>
 
@@ -69,26 +61,21 @@
                         </select>
                     </div>
                     <div>
-                        <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">Exam Length / Mode:</label>
+                        <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">Practice Mode:</label>
                         <select id="exam-length-select" style="background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border); padding: 10px; border-radius: 8px; width: 100%; cursor: pointer; font-weight: 600;">
-                            <option value="5">Express (5 Qs)</option>
-                            <option value="15">Short (15 Qs)</option>
-                            <option value="30" selected>Standard (30 Qs)</option>
-                            <option value="60">Full Simulation (60 Qs)</option>
-                            <option value="survival">☠️ Survival Mode</option>
-                            <option value="simulation">🎓 Official Simulation (65 Qs)</option>
+                            <option value="10">Standard Batch (10 Scenarios)</option>
+                            <option value="20">Deep Practice (20 Scenarios)</option>
+                            <option value="all">Full Category Review</option>
                         </select>
 
                     </div>
                 </div>
 
                 <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                    <button class="btn-primary" id="start-exam-btn">Start Practice Session</button>
+                    <button class="btn-primary" id="start-mastery-btn" style="background: var(--warning); color: black; font-weight: 800; padding: 16px 32px;">🏆 START MASTERY PRACTICE (HARD)</button>
                     <button class="btn-outline" id="start-study-btn" style="border-color: var(--warning); color: var(--warning);">⚡ Study Flashcards</button>
-                    <button class="btn-outline" id="go-to-mistakes" style="border-color: var(--error); color: var(--error);">🔥 Mistake Bank</button>
-                    <button class="btn-outline" id="go-to-import">Import</button>
-                    <button class="btn-outline" id="go-to-history">History</button>
-                    <button class="btn-outline" id="reset-stats" style="border-color: var(--error); color: var(--error); opacity: 0.6; font-size: 0.7rem;">Reset Progress</button>
+                    <button class="btn-outline" id="go-to-import">Import Units</button>
+                    <button class="btn-outline" id="reset-stats" style="border-color: var(--error); color: var(--error); opacity: 0.6; font-size: 0.7rem;">Reset Stats</button>
                 </div>
 
 
@@ -207,6 +194,36 @@
 
                 <button class="btn-primary" id="show-answer-btn">Show Answer</button>
                 <button class="btn-outline" id="exit-study-btn" style="margin-top: 20px;">Exit Study Mode</button>
+            </div>
+        </section>
+
+        <!-- MASTERY PRACTICE VIEW (OPEN-ENDED) -->
+        <section id="mastery-practice-view" class="hidden">
+            <div class="card">
+                <div class="question-header">
+                    <span class="category-tag" id="mp-category">Automation</span>
+                    <h2 class="question-text" id="mp-text" style="font-size: 1.3rem;">Business Scenario: How would you handle...?</h2>
+                    <p style="font-size: 0.8rem; color: var(--warning); margin-top: 10px; font-weight: bold;">(Open Answer Mode - IA Evaluation)</p>
+                </div>
+
+                <div style="margin: 24px 0;">
+                    <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">Your solution (Be precise with names):</label>
+                    <textarea id="mp-answer" style="width: 100%; height: 150px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); padding: 12px; font-size: 1rem;" placeholder="Explain your setup here..."></textarea>
+                </div>
+
+                <div id="mp-feedback-area" class="hidden" style="margin-bottom: 24px; padding: 16px; border-radius: 8px; background: rgba(255,255,255,0.05);">
+                    <div id="mp-score-badge" style="display: inline-block; padding: 4px 8px; border-radius: 4px; font-weight: 800; font-size: 0.8rem; margin-bottom: 10px;">Score: 0</div>
+                    <p id="mp-feedback-text" style="font-size: 0.95rem; line-height: 1.5;"></p>
+                    <div id="mp-missing-terms" style="margin-top: 10px; font-size: 0.85rem; color: var(--error);"></div>
+                </div>
+
+                <div style="display: flex; gap: 12px; align-items: center; justify-content: space-between;">
+                    <button class="btn-outline" id="mp-exit-btn">Exit</button>
+                    <div style="display: flex; gap: 12px;">
+                        <button class="btn-primary" id="mp-submit-btn">Validate with IA</button>
+                        <button class="btn-primary hidden" id="mp-next-btn" style="background: var(--success); color: black;">Next Scenario</button>
+                    </div>
+                </div>
             </div>
         </section>
 

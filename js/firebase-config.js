@@ -1,9 +1,8 @@
 export const firebaseConfig = {
-    apiKey: "AIzaSyCpSFcrAXFc1KvI2GZrjOBrfzEHc6lmjAU",
-    authDomain: "salesforce-59869.firebaseapp.com",
-    projectId: "salesforce-59869",
-    storageBucket: "salesforce-59869.firebasestorage.app",
-    messagingSenderId: "761222676397",
-    appId: "1:761222676397:web:611f46a272414f8857eb24"
+    apiKey: "AIzaSyCVbFnhN9cauYfVpadbco_yGxcFskDh_vU",
+    authDomain: "salesforce-936c0.firebaseapp.com",
+    projectId: "salesforce-936c0",
+    storageBucket: "salesforce-936c0.firebasestorage.app",
+    messagingSenderId: "865326657204",
+    appId: "1:865326657204:web:51b2c4a26b8e375b37f1e1"
 };
-
