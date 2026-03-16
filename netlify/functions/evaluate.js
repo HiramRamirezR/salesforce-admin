@@ -1,12 +1,11 @@
 
 // Node 22 has native fetch, no need for node-fetch
 exports.handler = async (event, context) => {
-  // Solo permitir peticiones POST
   if (event.httpMethod !== "POST") {
     return { statusCode: 405, body: "Method Not Allowed" };
   }
 
-  const { userAnswer, unit } = JSON.parse(event.body);
+  const { userAnswer, unit, history = [] } = JSON.parse(event.body);
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
@@ -16,57 +15,77 @@ exports.handler = async (event, context) => {
     };
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+  // Use the specific model requested by user or fallback
+  const model = "gemini-2.5-flash"; // Or use "gemini-2.5-flash" if available/selected by user
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-  const systemPrompt = `
-    You are a strict Salesforce Certification Proctor. 
-    Evaluate the User Answer against the Reference Answer for the concept: "${unit.concept}".
+  const sysInstruction = `
+    You are a Salesforce Certification Tutor using an Aristotelian/Socratic learning method.
+    Target Concept: "${unit.concept}".
+    Reference Answer: "${unit.referenceAnswer}".
+    Key Terms: ${unit.keyTerms.join(", ")}.
 
     RULES:
-    1. Be extremely strict with technical terms. 
-    2. Check if the user mentioned these key terms: ${unit.keyTerms.join(", ")}.
-    3. If the logic is correct and terms are used, score high.
-    4. If the logic is flawed or terms are missing, score low.
-
-    Output MUST be a valid JSON:
+    1. EVALUATION: Calculate a "score" (0-100) based on how complete and technically accurate the User Answer is. Be extremely strict with technical terms.
+    2. SOCRATIC MODE: 
+       - If the score is 100, congratulate the user.
+       - If the score is < 100, DO NOT GIVE THE ANSWER. Instead, formulate a question or a hint that guides the user to discover the missing concepts or terms themselves.
+       - If the user seems stuck after multiple attempts, provide a slightly more direct hint but still avoid giving the full answer.
+    3. JSON OUTPUT IS MANDATORY. You must return ONLY a JSON object with this structure:
     {
-      "score": number (0-100),
-      "isCorrect": boolean (true if score >= 85),
-      "feedback": "Short feedback in English explaining what was missed.",
-      "masteryIncrement": boolean (true if score >= 90),
+      "score": number,
+      "isCorrect": boolean (true ONLY if score == 100),
+      "feedback": "Your Socratic response/hint or Congratulations",
+      "masteryIncrement": boolean (true ONLY if score == 100 and there is no previous history),
       "missingTerms": ["list", "of", "missing", "key", "terms"]
     }
   `;
 
+  const contents = [];
+
+  // Add history to contents
+  history.forEach(msg => {
+    contents.push({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }]
+    });
+  });
+
+  // Add the current answer
+  contents.push({
+    role: 'user',
+    parts: [{ text: `User Answer: ${userAnswer}` }]
+  });
+
   try {
+    const payload = {
+      system_instruction: {
+        parts: [{ text: sysInstruction }]
+      },
+      contents: contents,
+      generationConfig: {
+        response_mime_type: "application/json"
+      }
+    };
+
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: `${systemPrompt}\n\nReference Answer: ${unit.referenceAnswer}\nUser Answer: ${userAnswer}`
-          }]
-        }]
-      })
+      body: JSON.stringify(payload)
     });
 
     const data = await response.json();
-    console.log("Gemini Raw Response:", JSON.stringify(data));
 
     if (!data.candidates || !data.candidates[0].content.parts[0].text) {
       throw new Error("Invalid response from Gemini API: " + JSON.stringify(data));
     }
 
     const resultText = data.candidates[0].content.parts[0].text;
-    const cleanJson = resultText.replace(/```json/g, "").replace(/```/g, "").trim();
-
-    console.log("Cleaned JSON for frontend:", cleanJson);
 
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: cleanJson
+      body: resultText // Already JSON since we requested application/json
     };
   } catch (error) {
     console.error("Function Error:", error);

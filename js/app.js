@@ -9,6 +9,11 @@ let timerInterval = null;
 let timeLeft = 52.5 * 60; // 52 minutes and 30 seconds
 let sessionStartTime = null; 
 let studyTicker = null;
+let currentSessionConfig = {
+    mode: 'all', // all or unmastered
+    type: 'flashcards' // flashcards or mastery
+};
+let dialogueHistory = [];
 
 // --- DOM Elements ---
 const views = {
@@ -145,30 +150,73 @@ async function renderGlobalMastery() {
     ];
 
     topics.forEach(cat => {
-        const stats = masteryStats[cat] || { total: 0, mastered: 0, weight: 0 };
+        const stats = masteryStats[cat] || { total: 0, mastered: 0, weight: 0, units: [] };
         const masteryPerc = stats.total > 0 ? Math.round((stats.mastered / stats.total) * 100) : 0;
         const isLoaded = stats.total > 0;
         
-        const div = document.createElement('div');
-        div.style.marginBottom = '20px';
-        div.style.opacity = isLoaded ? '1' : '0.4';
-        div.innerHTML = `
+        const wrapper = document.createElement('div');
+        wrapper.style.marginBottom = '12px';
+        
+        const masteryRow = document.createElement('div');
+        masteryRow.className = 'mastery-row';
+        masteryRow.style.opacity = isLoaded ? '1' : '0.4';
+        masteryRow.innerHTML = `
             <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px;">
                 <span>
                     <strong>${cat}</strong> 
                     <span style="color: var(--text-muted); font-size: 0.75rem;">(Weight: ${stats.weight || 0}%)</span>
-                    ${isLoaded ? ' <span style="color: var(--success); font-size: 0.7rem;">[LOADED]</span>' : ' <span style="color: var(--error); font-size: 0.7rem;">[EMPTY]</span>'}
                 </span>
                 <span style="color: var(--warning); font-weight: 700;">${masteryPerc}% Mastered</span>
             </div>
             <div style="height: 8px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden; margin-bottom: 4px; border: 1px solid ${isLoaded ? 'var(--warning)' : 'var(--border)'};">
                 <div style="height: 100%; width: ${masteryPerc}%; background: linear-gradient(90deg, var(--warning), #ffcc00); transition: width 1s ease;"></div>
             </div>
-            <div style="font-size: 0.7rem; color: var(--text-muted);">
-                ${isLoaded ? `${stats.mastered} of ${stats.total} scenarios conquered` : 'No scenarios imported yet'}
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="font-size: 0.7rem; color: var(--text-muted);">
+                    ${isLoaded ? `${stats.mastered} of ${stats.total} scenarios conquered` : 'No scenarios imported yet'}
+                </div>
+                ${isLoaded ? '<span style="font-size: 0.7rem; color: var(--primary); cursor: pointer;">View Details ▾</span>' : ''}
             </div>
         `;
-        container.appendChild(div);
+
+        if (isLoaded) {
+            const detailsPanel = document.createElement('div');
+            detailsPanel.className = 'details-panel';
+            
+            // Sort units: Mastered first or vice-versa? Let's show Mastered first but with clear distinction
+            const sortedUnits = [...stats.units].sort((a, b) => {
+                if (a.status === 'mastered' && b.status !== 'mastered') return 1;
+                if (a.status !== 'mastered' && b.status === 'mastered') return -1;
+                return 0;
+            });
+
+            detailsPanel.innerHTML = sortedUnits.map(u => `
+                <div class="unit-detail-item">
+                    <span>
+                        <span class="status-dot ${u.status === 'mastered' ? 'status-mastered' : 'status-pending'}"></span>
+                        ${u.concept}
+                    </span>
+                    <span style="color: var(--text-muted); font-size: 0.7rem; opacity: 0.8;">
+                        ${u.status === 'mastered' ? 'Mastered ✅' : 'In Progress'}
+                    </span>
+                </div>
+            `).join('');
+
+            masteryRow.onclick = () => {
+                detailsPanel.classList.toggle('open');
+                const label = masteryRow.querySelector('span:last-child');
+                if (label && label.textContent.includes('View')) {
+                    label.textContent = detailsPanel.classList.contains('open') ? 'Hide Details ▴' : 'View Details ▾';
+                }
+            };
+            
+            wrapper.appendChild(masteryRow);
+            wrapper.appendChild(detailsPanel);
+        } else {
+            wrapper.appendChild(masteryRow);
+        }
+
+        container.appendChild(wrapper);
     });
 }
 
@@ -180,7 +228,6 @@ async function updateCategoryPool() {
 
     document.getElementById('total-questions').textContent = stats.total;
     document.getElementById('mastered-count').textContent = stats.mastered;
-    document.getElementById('batches-count').textContent = stats.batches;
     document.getElementById('study-streak').textContent = exp.streak;
     const minsToday = Math.floor(exp.timeToday / 60);
     document.getElementById('study-time-today').textContent = `${minsToday}m`;
@@ -485,16 +532,36 @@ setupBtn('study-pass-btn', () => nextStudyCard(true));
 setupBtn('study-fail-btn', () => nextStudyCard(false));
 setupBtn('exit-study-btn', () => showView('home'));
 
+// --- Session Config ---
+function showSessionConfig(type) {
+    currentSessionConfig.type = type;
+    const topic = document.getElementById('category-select').value;
+    
+    // Simple UI prompt for now
+    const choice = confirm(`Topic: ${topic}\n\nDo you want to study ONLY unmastered cards?\n\n(OK = Unmastered Only, Cancel = All)`);
+    currentSessionConfig.mode = choice ? 'unmastered' : 'all';
+    
+    if (type === 'flashcards') startStudy();
+    else startMasteryPractice();
+}
 
 async function startStudy() {
     const topic = document.getElementById('category-select').value;
-    // We use the same source as Mastery Practice
-    masteryUnits = await DB.getUnitsByTopic(topic);
+    let allUnits = await DB.getUnitsByTopic(topic);
+    
+    if (currentSessionConfig.mode === 'unmastered') {
+        masteryUnits = allUnits.filter(u => u.status !== 'mastered');
+    } else {
+        masteryUnits = allUnits;
+    }
     
     if (masteryUnits.length === 0) {
-        alert("No units found to study. Please import your JSON first!");
+        alert("No units found matching your criteria.");
         return;
     }
+
+    // ALWAYS SHUFFLE
+    masteryUnits = masteryUnits.sort(() => 0.5 - Math.random());
     
     masteryIndex = 0;
     showView('study');
@@ -503,19 +570,17 @@ async function startStudy() {
 
 function renderStudyCard() {
     const unit = masteryUnits[masteryIndex];
-    document.getElementById('study-category').textContent = unit.category;
+    
+    // Update Counter in UI
+    const topic = document.getElementById('category-select').value;
+    DB.getUnitsByTopic(topic).then(all => {
+        const unmasteredCount = all.filter(u => u.status !== 'mastered').length;
+        document.getElementById('study-category').textContent = `${unit.category} | Remaining: ${unmasteredCount} / ${all.length}`;
+    });
+
     document.getElementById('study-question').textContent = `Concept: ${unit.concept}`;
     
-    // Detailed educational content
     const expBox = document.getElementById('study-explanation');
-    
-    // UNLOCK THE UNIT: When viewed in Flashcards, it becomes 'learning'
-    if (unit.status === 'locked') {
-        DB.updateUnitStatus(unit.id, 'learning').then(() => {
-            unit.status = 'learning';
-            DB.clearCache(); // Ensure next fetch gets the 'learning' status
-        });
-    }
     expBox.innerHTML = `
         <div style="margin-bottom: 15px;">
             <strong style="color: var(--primary);">Definition:</strong><br>
@@ -538,8 +603,6 @@ function renderStudyCard() {
 }
 
 async function nextStudyCard(isMasteryAction) {
-    // If user clicks "Got it", we could optionally increment progress, 
-    // but for now let's just move to the next card to study.
     masteryIndex++;
     if (masteryIndex < masteryUnits.length) {
         renderStudyCard();
@@ -626,92 +689,6 @@ let currentMasteryUnit = null;
 let masteryUnits = [];
 let masteryIndex = 0;
 
-async function startMasteryPractice() {
-    const topic = document.getElementById('category-select').value;
-    let allUnits = await DB.getUnitsByTopic(topic);
-    
-    // FILTER: Only units that are NOT 'locked'
-    // They must have been reviewed via Flashcards first
-    masteryUnits = allUnits.filter(u => u.status !== 'locked' && u.status !== 'mastered');
-
-    if (masteryUnits.length === 0) {
-        const totalLockedInTopic = allUnits.filter(u => u.status === 'locked').length;
-        if (totalLockedInTopic > 0) {
-            alert(`You have ${totalLockedInTopic} units locked. Please study them via Flashcards first!`);
-        } else {
-            alert("No units to practice in this category.");
-        }
-        return;
-    }
-    
-    // In "all", shuffle and pick limit
-    if (topic === 'all') {
-        masteryUnits = masteryUnits.sort(() => 0.5 - Math.random()).slice(0, 10);
-    }
-
-    masteryIndex = 0;
-    showView('masteryPractice');
-    renderMasteryScenario();
-}
-
-function renderMasteryScenario() {
-    currentMasteryUnit = masteryUnits[masteryIndex];
-    
-    document.getElementById('mp-category').textContent = currentMasteryUnit.category;
-    document.getElementById('mp-text').textContent = currentMasteryUnit.hardQuestion;
-    document.getElementById('mp-answer').value = '';
-    
-    // Reset feedback area
-    const feedbackArea = document.getElementById('mp-feedback-area');
-    feedbackArea.classList.add('hidden');
-    
-    document.getElementById('mp-submit-btn').classList.remove('hidden');
-    document.getElementById('mp-next-btn').classList.add('hidden');
-}
-
-async function submitMasteryAnswer() {
-    const userAnswer = document.getElementById('mp-answer').value.trim();
-    if (!userAnswer) return;
-
-    const submitBtn = document.getElementById('mp-submit-btn');
-    submitBtn.disabled = true;
-    submitBtn.textContent = "AI is thinking...";
-
-    try {
-        const result = await evaluateMastery(userAnswer, currentMasteryUnit);
-        
-        // Update DB
-        await DB.updateUnitMastery(currentMasteryUnit.id, result.masteryIncrement);
-
-        // Show Feedback
-        const feedbackArea = document.getElementById('mp-feedback-area');
-        const scoreBadge = document.getElementById('mp-score-badge');
-        const feedbackText = document.getElementById('mp-feedback-text');
-        const missingTerms = document.getElementById('mp-missing-terms');
-
-        feedbackArea.classList.remove('hidden');
-        scoreBadge.textContent = `Score: ${result.score}%`;
-        scoreBadge.style.background = result.isCorrect ? 'var(--success)' : 'var(--error)';
-        scoreBadge.style.color = 'black';
-        
-        feedbackText.textContent = result.feedback;
-        
-        if (result.missingTerms && result.missingTerms.length > 0) {
-            missingTerms.textContent = `Missing terms: ${result.missingTerms.join(", ")}`;
-        } else {
-            missingTerms.textContent = '';
-        }
-
-        submitBtn.classList.add('hidden');
-        document.getElementById('mp-next-btn').classList.remove('hidden');
-    } catch (e) {
-        alert("Error evaluating answer: " + e.message);
-    } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = "Validate with IA";
-    }
-}
-
 setupBtn('start-mastery-btn', startMasteryPractice);
 setupBtn('mp-submit-btn', submitMasteryAnswer);
 setupBtn('mp-next-btn', () => {
@@ -725,6 +702,128 @@ setupBtn('mp-next-btn', () => {
     }
 });
 setupBtn('mp-exit-btn', () => showView('home'));
+
+async function startMasteryPractice() {
+    const topic = document.getElementById('category-select').value;
+    let allUnits = await DB.getUnitsByTopic(topic);
+    
+    // Mastery Practice is ALWAYS unmastered by default to optimize time
+    masteryUnits = allUnits.filter(u => u.status !== 'mastered');
+
+    if (masteryUnits.length === 0) {
+        if (allUnits.length > 0) {
+            alert("Congratulations! You have mastered all units in this topic. 🏆");
+        } else {
+            alert("No units found in this category.");
+        }
+        return;
+    }
+    
+    // ALWAYS SHUFFLE
+    masteryUnits = masteryUnits.sort(() => 0.5 - Math.random());
+
+    masteryIndex = 0;
+    showView('masteryPractice');
+    renderMasteryScenario();
+}
+
+function renderMasteryScenario() {
+    currentMasteryUnit = masteryUnits[masteryIndex];
+    dialogueHistory = []; // Reset dialogue for new scenario
+    
+    // Update Counter in UI
+    const topic = document.getElementById('category-select').value;
+    DB.getUnitsByTopic(topic).then(all => {
+        const unmasteredCount = all.filter(u => u.status !== 'mastered').length;
+        document.getElementById('mp-category').textContent = `${currentMasteryUnit.category} | Remaining: ${unmasteredCount} / ${all.length}`;
+    });
+
+    document.getElementById('mp-text').textContent = currentMasteryUnit.hardQuestion;
+    document.getElementById('mp-answer').value = '';
+    document.getElementById('mp-answer').placeholder = "Explain your setup here...";
+    
+    // Reset feedback area
+    const feedbackArea = document.getElementById('mp-feedback-area');
+    feedbackArea.classList.add('hidden');
+    
+    document.getElementById('mp-submit-btn').classList.remove('hidden');
+    document.getElementById('mp-submit-btn').textContent = "Validate with IA";
+    document.getElementById('mp-give-up-btn').classList.remove('hidden');
+    document.getElementById('mp-next-btn').classList.add('hidden');
+}
+
+async function submitMasteryAnswer() {
+    const userAnswer = document.getElementById('mp-answer').value.trim();
+    if (!userAnswer) return;
+
+    const submitBtn = document.getElementById('mp-submit-btn');
+    submitBtn.disabled = true;
+    const isContinuing = dialogueHistory.length > 0;
+    submitBtn.textContent = isContinuing ? "Tutor is thinking..." : "AI is evaluating mastery...";
+
+    try {
+        const result = await evaluateMastery(userAnswer, currentMasteryUnit, dialogueHistory);
+        
+        // Add to history
+        dialogueHistory.push({ role: 'user', content: userAnswer });
+        dialogueHistory.push({ role: 'assistant', content: result.feedback });
+
+        // Update DB ONLY if 100% on FIRST attempt
+        if (!isContinuing && result.masteryIncrement) {
+             await DB.updateUnitMastery(currentMasteryUnit.id, true);
+        }
+
+        // Show Feedback
+        const feedbackArea = document.getElementById('mp-feedback-area');
+        const scoreBadge = document.getElementById('mp-score-badge');
+        const feedbackText = document.getElementById('mp-feedback-text');
+
+        feedbackArea.classList.remove('hidden');
+        scoreBadge.textContent = `Score: ${result.score}%`;
+        
+        if (result.score === 100) {
+            scoreBadge.style.background = 'var(--success)';
+            submitBtn.classList.add('hidden');
+            document.getElementById('mp-next-btn').classList.remove('hidden');
+        } else {
+            scoreBadge.style.background = 'var(--warning)';
+            submitBtn.textContent = "Send to Tutor";
+            document.getElementById('mp-answer').value = ''; // Clear for next reply
+            document.getElementById('mp-answer').placeholder = "Follow-up with the Tutor here...";
+        }
+        scoreBadge.style.color = 'black';
+        feedbackText.textContent = result.feedback;
+
+    } catch (e) {
+        alert("Error evaluating answer: " + e.message);
+    } finally {
+        submitBtn.disabled = false;
+    }
+}
+
+setupBtn('mp-give-up-btn', () => {
+    if (!currentMasteryUnit) return;
+    
+    const feedbackArea = document.getElementById('mp-feedback-area');
+    const feedbackText = document.getElementById('mp-feedback-text');
+    const scoreBadge = document.getElementById('mp-score-badge');
+    
+    feedbackArea.classList.remove('hidden');
+    scoreBadge.textContent = "Given Up";
+    scoreBadge.style.background = 'var(--text-muted)';
+    
+    feedbackText.innerHTML = `
+        <div style="margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.2); border-left: 3px solid var(--primary);">
+            <strong style="color: var(--primary);">Reference Answer:</strong><br>
+            ${currentMasteryUnit.referenceAnswer}
+        </div>
+        <p style="margin-top: 10px; font-size: 0.9rem; color: var(--text-muted);">This unit remains unmastered. Try again later!</p>
+    `;
+    
+    document.getElementById('mp-submit-btn').classList.add('hidden');
+    document.getElementById('mp-give-up-btn').classList.add('hidden');
+    document.getElementById('mp-next-btn').classList.remove('hidden');
+});
 
 
 setupBtn('reset-stats', () => {

@@ -280,6 +280,59 @@ button {
     box-shadow: 0 0 10px rgba(241, 196, 15, 0.3);
 }
 
+/* Accordion Styles */
+.mastery-row {
+    cursor: pointer;
+    padding: 10px;
+    border-radius: 12px;
+    transition: var(--transition);
+}
+
+.mastery-row:hover {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.details-panel {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s ease-out, padding 0.3s ease;
+    padding: 0 10px;
+    background: rgba(0,0,0,0.15);
+    border-radius: 8px;
+    margin-top: 5px;
+}
+
+.details-panel.open {
+    max-height: 800px; /* Large enough for many units */
+    padding: 15px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border);
+}
+
+.unit-detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.8rem;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.unit-detail-item:last-child {
+    border-bottom: none;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+}
+
+.status-mastered { background: var(--success); box-shadow: 0 0 5px var(--success); }
+.status-pending { background: var(--text-muted); }
+
 /* Responsive */
 @media (max-width: 600px) {
     .container { padding: 15px; }

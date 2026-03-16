@@ -276,29 +276,23 @@ export async function getUnitsByTopic(topic) {
 
 export async function updateUnitMastery(unitId, isMasteryPoint) {
     const docRef = doc(db, MASTERY_COL, unitId);
-    const docSnap = await getDoc(docRef);
     
-    if (docSnap.exists()) {
-        const data = docSnap.data();
-        let newProgress = data.masteryProgress || 0;
-        
-        if (isMasteryPoint) {
-            newProgress = Math.min(newProgress + 1, 5);
-        } else {
-            // Penalización moderada: si falla, baja 2 puntos para asegurar re-estudio
-            newProgress = Math.max(newProgress - 2, 0);
-        }
-
-        const newStatus = newProgress >= 5 ? 'mastered' : 'practicing';
-        
+    if (isMasteryPoint) {
         await updateDoc(docRef, {
-            masteryProgress: newProgress,
-            status: newStatus,
+            masteryProgress: 5,
+            status: 'mastered',
             attempts: increment(1),
             lastAttempt: new Date()
         });
-        
-        return { newProgress, newStatus };
+        return { newProgress: 5, newStatus: 'mastered' };
+    } else {
+        // If they failed the first attempt, we could track it or just leave it
+        await updateDoc(docRef, {
+            attempts: increment(1),
+            lastAttempt: new Date(),
+            status: 'practicing'
+        });
+        return { newStatus: 'practicing' };
     }
 }
 
@@ -324,7 +318,7 @@ export async function getExamMasteryProgress() {
     const progress = {};
     
     Object.keys(OFFICIAL_WEIGHTS).forEach(cat => {
-        progress[cat] = { total: 0, mastered: 0, weight: OFFICIAL_WEIGHTS[cat] };
+        progress[cat] = { total: 0, mastered: 0, weight: OFFICIAL_WEIGHTS[cat], units: [] };
     });
 
     units.forEach(data => {
@@ -332,6 +326,10 @@ export async function getExamMasteryProgress() {
         if (progress[cat]) {
             progress[cat].total++;
             if (data.status === 'mastered') progress[cat].mastered++;
+            progress[cat].units.push({
+                concept: data.concept,
+                status: data.status
+            });
         }
     });
     
