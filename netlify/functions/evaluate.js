@@ -26,11 +26,14 @@ exports.handler = async (event, context) => {
       Key Terms: ${unit.keyTerms.join(", ")}.
 
       RULES:
-      1. EVALUATION: Calculate a "score" (0-100) based on how complete and technically accurate the User Answer is. Be extremely strict with technical terms.
+      1. EVALUATION: Calculate a "score" (0-100). 
+         - Use the "Reference Answer" as the maximum standard for 100%. If the user's answer is technically equivalent in content and logic to the reference answer, you MUST award a 100%.
+         - Focus ONLY on technical accuracy and the presence of "Key Terms". Do not penalize for writing style, brevity, or minor grammar issues.
+         - If the user answer covers all major points of the concept correctly, award 100%.
       2. SOCRATIC MODE: 
-         - If the score is 100, congratulate the user.
+         - If the score is 100, congratulate the user briefly.
          - If the score is < 100, DO NOT GIVE THE ANSWER. Instead, formulate a question or a hint that guides the user to discover the missing concepts or terms themselves.
-         - If the user seems stuck after multiple attempts, provide a slightly more direct hint but still avoid giving the full answer.
+         - If the answer is almost perfect (approx 95%), round up to 100% to encourage the user.
       3. JSON OUTPUT IS MANDATORY:
       {
         "score": number,

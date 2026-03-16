@@ -529,6 +529,13 @@ setupBtn('show-answer-btn', () => {
     document.getElementById('study-answer-area').classList.remove('hidden');
     document.getElementById('show-answer-btn').classList.add('hidden');
     document.getElementById('skip-study-btn').classList.add('hidden');
+    document.getElementById('prev-study-btn').classList.add('hidden');
+});
+setupBtn('prev-study-btn', () => {
+    if (masteryIndex > 0) {
+        masteryIndex--;
+        renderStudyCard();
+    }
 });
 setupBtn('study-next-btn', () => nextStudyCard(false));
 setupBtn('study-challenge-btn', startFlashcardChallenge);
@@ -644,7 +651,10 @@ function renderStudyCard() {
         document.getElementById('study-category').textContent = `${unit.category} | Mastered: ${masteredCount} / ${all.length}`;
     });
 
-    document.getElementById('study-question').textContent = `Concept: ${unit.concept}`;
+    const statusIcon = unit.status === 'mastered' 
+        ? '<span class="status-dot status-mastered" title="Mastered" style="margin-left: 10px; margin-right: 0;"></span>' 
+        : '';
+    document.getElementById('study-question').innerHTML = `Concept: ${unit.concept} ${statusIcon}`;
     
     const expBox = document.getElementById('study-explanation');
     expBox.innerHTML = `
@@ -667,6 +677,13 @@ function renderStudyCard() {
     document.getElementById('study-answer-area').classList.add('hidden');
     document.getElementById('show-answer-btn').classList.remove('hidden');
     document.getElementById('skip-study-btn').classList.remove('hidden');
+
+    const prevBtn = document.getElementById('prev-study-btn');
+    if (masteryIndex === 0) {
+        prevBtn.classList.add('hidden');
+    } else {
+        prevBtn.classList.remove('hidden');
+    }
     
     // Reset Tutor Chat
     document.getElementById('study-tutor-chat').innerHTML = '';
@@ -870,6 +887,7 @@ async function submitMasteryAnswer() {
         // Update DB ONLY if 100% on FIRST attempt
         if (!isContinuing && result.masteryIncrement) {
              await DB.updateUnitMastery(currentMasteryUnit.id, true);
+             currentMasteryUnit.status = 'mastered'; // Update local state for immediate UI feedback
         }
 
         // Show Feedback
