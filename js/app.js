@@ -14,6 +14,7 @@ let currentSessionConfig = {
     type: 'flashcards' // flashcards or mastery
 };
 let dialogueHistory = [];
+let isChallengeFromFlashcard = false;
 
 // --- DOM Elements ---
 const views = {
@@ -527,10 +528,75 @@ async function loadMistakeBank() {
 setupBtn('show-answer-btn', () => {
     document.getElementById('study-answer-area').classList.remove('hidden');
     document.getElementById('show-answer-btn').classList.add('hidden');
+    document.getElementById('skip-study-btn').classList.add('hidden');
 });
-setupBtn('study-pass-btn', () => nextStudyCard(true));
-setupBtn('study-fail-btn', () => nextStudyCard(false));
+setupBtn('study-next-btn', () => nextStudyCard(false));
+setupBtn('study-challenge-btn', startFlashcardChallenge);
+setupBtn('skip-study-btn', () => nextStudyCard(false));
 setupBtn('exit-study-btn', () => showView('home'));
+setupBtn('study-ask-btn', askFlashcardTutor);
+
+async function askFlashcardTutor() {
+    const input = document.getElementById('study-tutor-input');
+    const chat = document.getElementById('study-tutor-chat');
+    const btn = document.getElementById('study-ask-btn');
+    const question = input.value.trim();
+    if (!question) return;
+
+    btn.disabled = true;
+    btn.textContent = "...";
+    
+    // Add user question to UI
+    chat.classList.remove('hidden');
+    const userMsg = document.createElement('div');
+    userMsg.style.marginBottom = '10px';
+    userMsg.innerHTML = `<strong style="color: var(--primary);">You:</strong> ${question}`;
+    chat.appendChild(userMsg);
+    input.value = '';
+
+    try {
+        const unit = masteryUnits[masteryIndex];
+        // In Flashcards, we want an 'explaining teacher' mode
+        const result = await evaluateMastery(question, unit, dialogueHistory, 'study');
+        
+        // Add to history
+        dialogueHistory.push({ role: 'user', content: question });
+        dialogueHistory.push({ role: 'assistant', content: result.feedback });
+
+        // Add assistant reply to UI
+        const assistantMsg = document.createElement('div');
+        assistantMsg.style.marginBottom = '10px';
+        assistantMsg.innerHTML = `<strong style="color: var(--warning);">Tutor:</strong> ${result.feedback}`;
+        chat.appendChild(assistantMsg);
+        
+        // Scroll to bottom
+        chat.scrollTop = chat.scrollHeight;
+
+    } catch (e) {
+        alert("Error: " + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = "Ask Tutor";
+    }
+}
+
+function startFlashcardChallenge() {
+    isChallengeFromFlashcard = true;
+    
+    // Save flashcard session state globally (temp variables aren't enough)
+    window._studyUnits = masteryUnits;
+    window._studyIndex = masteryIndex;
+
+    currentMasteryUnit = masteryUnits[masteryIndex];
+    
+    // Switch view
+    showView('masteryPractice');
+    
+    // Setup for 1-unit Mastery session
+    masteryUnits = [currentMasteryUnit];
+    masteryIndex = 0;
+    renderMasteryScenario();
+}
 
 // --- Session Config ---
 function showSessionConfig(type) {
@@ -574,8 +640,8 @@ function renderStudyCard() {
     // Update Counter in UI
     const topic = document.getElementById('category-select').value;
     DB.getUnitsByTopic(topic).then(all => {
-        const unmasteredCount = all.filter(u => u.status !== 'mastered').length;
-        document.getElementById('study-category').textContent = `${unit.category} | Remaining: ${unmasteredCount} / ${all.length}`;
+        const masteredCount = all.filter(u => u.status === 'mastered').length;
+        document.getElementById('study-category').textContent = `${unit.category} | Mastered: ${masteredCount} / ${all.length}`;
     });
 
     document.getElementById('study-question').textContent = `Concept: ${unit.concept}`;
@@ -600,6 +666,12 @@ function renderStudyCard() {
     
     document.getElementById('study-answer-area').classList.add('hidden');
     document.getElementById('show-answer-btn').classList.remove('hidden');
+    document.getElementById('skip-study-btn').classList.remove('hidden');
+    
+    // Reset Tutor Chat
+    document.getElementById('study-tutor-chat').innerHTML = '';
+    document.getElementById('study-tutor-chat').classList.add('hidden');
+    document.getElementById('study-tutor-input').value = '';
 }
 
 async function nextStudyCard(isMasteryAction) {
@@ -692,16 +764,43 @@ let masteryIndex = 0;
 setupBtn('start-mastery-btn', startMasteryPractice);
 setupBtn('mp-submit-btn', submitMasteryAnswer);
 setupBtn('mp-next-btn', () => {
+    if (isChallengeFromFlashcard) {
+        isChallengeFromFlashcard = false;
+        // Restore Flashcard Session
+        masteryUnits = window._studyUnits;
+        masteryIndex = window._studyIndex;
+        
+        DB.getUnitsByTopic(currentMasteryUnit.category).then(all => {
+            const updatedUnit = all.find(u => u.id === currentMasteryUnit.id);
+            showView('study');
+            if (updatedUnit.status === 'mastered') {
+                nextStudyCard(false);
+            } else {
+                renderStudyCard();
+            }
+        });
+        return;
+    }
     masteryIndex++;
     if (masteryIndex < masteryUnits.length) {
         renderMasteryScenario();
     } else {
         alert("Mastery session complete!");
         showView('home');
-        location.reload(); // Refresh to see new mastery bars
+        location.reload(); 
     }
 });
-setupBtn('mp-exit-btn', () => showView('home'));
+setupBtn('mp-exit-btn', () => {
+    if (isChallengeFromFlashcard) {
+        isChallengeFromFlashcard = false;
+        masteryUnits = window._studyUnits;
+        masteryIndex = window._studyIndex;
+        showView('study');
+        renderStudyCard();
+    } else {
+        showView('home');
+    }
+});
 
 async function startMasteryPractice() {
     const topic = document.getElementById('category-select').value;
@@ -734,8 +833,8 @@ function renderMasteryScenario() {
     // Update Counter in UI
     const topic = document.getElementById('category-select').value;
     DB.getUnitsByTopic(topic).then(all => {
-        const unmasteredCount = all.filter(u => u.status !== 'mastered').length;
-        document.getElementById('mp-category').textContent = `${currentMasteryUnit.category} | Remaining: ${unmasteredCount} / ${all.length}`;
+        const masteredCount = all.filter(u => u.status === 'mastered').length;
+        document.getElementById('mp-category').textContent = `${currentMasteryUnit.category} | Mastered: ${masteredCount} / ${all.length}`;
     });
 
     document.getElementById('mp-text').textContent = currentMasteryUnit.hardQuestion;
@@ -762,7 +861,7 @@ async function submitMasteryAnswer() {
     submitBtn.textContent = isContinuing ? "Tutor is thinking..." : "AI is evaluating mastery...";
 
     try {
-        const result = await evaluateMastery(userAnswer, currentMasteryUnit, dialogueHistory);
+        const result = await evaluateMastery(userAnswer, currentMasteryUnit, dialogueHistory, 'mastery');
         
         // Add to history
         dialogueHistory.push({ role: 'user', content: userAnswer });
