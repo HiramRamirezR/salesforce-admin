@@ -179,7 +179,7 @@ async function renderGlobalMastery() {
                     ${isLoaded ? `${stats.mastered} of ${stats.total} scenarios conquered` : 'No scenarios imported yet'}
                 </div>
                 <div style="display: flex; gap: 10px; align-items: center;">
-                    ${masteryPerc === 100 ? `<button class="btn-primary" style="padding: 4px 10px; font-size: 0.65rem; background: var(--warning); color: black;" onclick="event.stopPropagation(); startTopicQuiz('${cat}')">Final Quiz 🏆</button>` : ''}
+                    ${masteryPerc === 100 ? `<button class="btn-primary" style="padding: 4px 10px; font-size: 0.65rem; background: var(--warning); color: black;" onclick="event.stopPropagation(); startTopicQuiz(event, '${cat}')">Final Quiz 🏆</button>` : ''}
                     ${isLoaded ? '<span style="font-size: 0.7rem; color: var(--primary); cursor: pointer;">View Details ▾</span>' : ''}
                 </div>
             </div>
@@ -235,7 +235,7 @@ async function renderGlobalMastery() {
     });
 }
 
-async function startTopicQuiz(topic) {
+async function startTopicQuiz(event, topic) {
     const units = await DB.getUnitsByTopic(topic);
     if (units.length === 0) return;
 
@@ -261,7 +261,8 @@ async function startTopicQuiz(topic) {
             document.getElementById('exam-length-select').value = "10"; // Fake batch size
             renderQuestion();
         } else {
-            throw new Error("Invalid quiz format");
+            const errorMsg = result.feedback || "Invalid quiz format received from AI.";
+            throw new Error(errorMsg);
         }
     } catch (e) {
         alert("Error generating quiz: " + e.message);
@@ -429,8 +430,10 @@ async function validateAnswer(isMultiple) {
     // Update Live Stats
     updateLiveStats();
 
-    // Update Mastery in DB
-    await DB.updateMastery(q.id, isCorrect);
+    // Update Mastery in DB only if it's a permanent question (has an ID)
+    if (q.id) {
+        await DB.updateMastery(q.id, isCorrect);
+    }
 
     // Survival Check
     if (mode === 'survival' && !isCorrect) {

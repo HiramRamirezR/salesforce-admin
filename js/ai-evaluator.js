@@ -15,10 +15,12 @@ export async function evaluateMastery(userAnswer, unit, history = [], mode = 'ma
             throw new Error(errData.error || "Server error");
         }
 
-        const responseText = await response.text();
+        const responseText = (await response.text()).trim();
         
         try {
-            return JSON.parse(responseText);
+            // Remove markdown code blocks if the AI included them
+            const cleanJSON = responseText.replace(/^```json\s*/i, '').replace(/\s*```$/i, '');
+            return JSON.parse(cleanJSON);
         } catch (parseError) {
             console.error("Raw response that failed to parse:", responseText);
             throw new Error("Invalid server response format.");
