@@ -143,6 +143,9 @@
                 <div class="question-header">
                     <span class="category-tag" id="q-category">Security and Access</span>
                     <h2 class="question-text" id="q-text">Is the question text loading correctly?</h2>
+                    <div id="q-image-container" class="hidden" style="margin-bottom: 20px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: rgba(0,0,0,0.2);">
+                        <img id="q-image" src="" style="width: 100%; height: auto; cursor: zoom-in; display: block;" onclick="window.showImageFull(this.src)">
+                    </div>
                 </div>
 
                 <div class="options-list" id="q-options">
@@ -181,15 +184,19 @@
             <div class="card text-center" style="min-height: 400px; display: flex; flex-direction: column; justify-content: center;">
                 <span class="category-tag" id="study-category">Category</span>
                 <h2 id="study-question" style="font-size: 1.4rem; margin: 30px 0;">Question text goes here?</h2>
+                <div id="study-image-container" class="hidden" style="margin-bottom: 20px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: rgba(0,0,0,0.2);">
+                    <img id="study-image" src="" style="width: 100%; height: auto; cursor: zoom-in; display: block;" onclick="window.showImageFull(this.src)">
+                </div>
                 
                 <div id="study-answer-area" class="hidden">
                     <div class="explanation-box" id="study-explanation" style="text-align: left; margin-bottom: 20px;">
                         Explanation here...
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                        <button class="btn-outline" id="prev-study-btn">↞ Prev</button>
                         <button class="btn-primary" id="study-next-btn">Next Card ➔</button>
-                        <button class="btn-primary" id="study-challenge-btn" style="background: linear-gradient(135deg, #f1c40f, #e67e22); color: black;">Challenge Mastery 🏆</button>
                     </div>
+                    <button class="btn-primary" id="study-challenge-btn" style="width: 100%; background: linear-gradient(135deg, #f1c40f, #e67e22); color: black;">Challenge Mastery 🏆</button>
 
                     <!-- Tutor Chat in Flashcards -->
                     <div id="study-tutor-area" style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
@@ -202,11 +209,6 @@
                     </div>
                 </div>
 
-                <div style="display: flex; gap: 12px; justify-content: center;">
-                    <button class="btn-outline" id="prev-study-btn" title="Previous card">↞ Prev</button>
-                    <button class="btn-primary" id="show-answer-btn" style="flex: 1;">Show Answer</button>
-                    <button class="btn-outline" id="skip-study-btn" title="Skip to next card">Skip ➔</button>
-                </div>
                 <button class="btn-outline" id="exit-study-btn" style="margin-top: 20px;">Exit Study Mode</button>
             </div>
         </section>
@@ -217,6 +219,9 @@
                 <div class="question-header">
                     <span class="category-tag" id="mp-category">Automation</span>
                     <h2 class="question-text" id="mp-text" style="font-size: 1.3rem;">Business Scenario: How would you handle...?</h2>
+                    <div id="mp-image-container" class="hidden" style="margin-bottom: 20px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: rgba(0,0,0,0.2);">
+                        <img id="mp-image" src="" style="width: 100%; height: auto; cursor: zoom-in; display: block;" onclick="window.showImageFull(this.src)">
+                    </div>
                     <p style="font-size: 0.8rem; color: var(--warning); margin-top: 10px; font-weight: bold;">(Open Answer Mode - IA Evaluation)</p>
                 </div>
 
@@ -236,6 +241,7 @@
                     <div style="display: flex; gap: 12px;">
                         <button class="btn-primary" id="mp-submit-btn">Validate with IA</button>
                         <button class="btn-outline" id="mp-give-up-btn" style="border-color: var(--error); color: var(--error);">I give up, show answer</button>
+                        <button class="btn-outline hidden" id="mp-retry-btn" style="border-color: var(--warning); color: var(--warning);">Retry Scenario ↺</button>
                         <button class="btn-primary hidden" id="mp-next-btn" style="background: var(--success); color: black;">Next Scenario</button>
                     </div>
                 </div>
@@ -253,6 +259,12 @@
                 <button class="btn-primary" style="margin-top: 20px; width: 100%;" onclick="location.reload()">Finish Review</button>
             </div>
         </section>
+    </div>
+
+    <!-- Full Image Modal -->
+    <div id="image-modal" class="hidden" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px;" onclick="this.classList.add('hidden')">
+        <img id="modal-img" src="" style="max-width: 95%; max-height: 95%; box-shadow: 0 0 50px rgba(0,0,0,1);">
+        <span style="position: absolute; top: 30px; right: 30px; color: white; font-size: 2rem; cursor: pointer;">✕</span>
     </div>
 
     <!-- Firebase SDKs -->

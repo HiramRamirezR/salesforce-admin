@@ -363,6 +363,15 @@ function renderQuestion() {
     document.getElementById('q-counter').textContent = `Question ${currentIndex + 1} of ${currentQuestions.length}`;
     document.getElementById('progress-bar').style.width = `${((currentIndex) / currentQuestions.length) * 100}%`;
 
+    const imgContainer = document.getElementById('q-image-container');
+    const qImg = document.getElementById('q-image');
+    if (q.imageUrl) {
+        qImg.src = q.imageUrl;
+        imgContainer.classList.remove('hidden');
+    } else {
+        imgContainer.classList.add('hidden');
+    }
+
     const optionsContainer = document.getElementById('q-options');
     optionsContainer.innerHTML = '';
 
@@ -742,10 +751,17 @@ function renderStudyCard() {
             <span style="font-style: italic; font-size: 0.9rem;">"${unit.flashcard.ELI5}"</span>
         </div>
     `;
+
+    const imgContainer = document.getElementById('study-image-container');
+    const sImg = document.getElementById('study-image');
+    if (unit.imageUrl) {
+        sImg.src = unit.imageUrl;
+        imgContainer.classList.remove('hidden');
+    } else {
+        imgContainer.classList.add('hidden');
+    }
     
-    document.getElementById('study-answer-area').classList.add('hidden');
-    document.getElementById('show-answer-btn').classList.remove('hidden');
-    document.getElementById('skip-study-btn').classList.remove('hidden');
+    document.getElementById('study-answer-area').classList.remove('hidden');
 
     const prevBtn = document.getElementById('prev-study-btn');
     if (masteryIndex === 0) {
@@ -935,6 +951,16 @@ function renderMasteryScenario() {
     document.getElementById('mp-submit-btn').textContent = "Validate with IA";
     document.getElementById('mp-give-up-btn').classList.remove('hidden');
     document.getElementById('mp-next-btn').classList.add('hidden');
+    document.getElementById('mp-retry-btn').classList.add('hidden');
+
+    const imgContainer = document.getElementById('mp-image-container');
+    const mImg = document.getElementById('mp-image');
+    if (currentMasteryUnit.imageUrl) {
+        mImg.src = currentMasteryUnit.imageUrl;
+        imgContainer.classList.remove('hidden');
+    } else {
+        imgContainer.classList.add('hidden');
+    }
 }
 
 async function submitMasteryAnswer() {
@@ -1008,8 +1034,11 @@ setupBtn('mp-give-up-btn', () => {
     
     document.getElementById('mp-submit-btn').classList.add('hidden');
     document.getElementById('mp-give-up-btn').classList.add('hidden');
+    document.getElementById('mp-retry-btn').classList.remove('hidden');
     document.getElementById('mp-next-btn').classList.remove('hidden');
 });
+
+setupBtn('mp-retry-btn', renderMasteryScenario);
 
 
 setupBtn('reset-stats', () => {
@@ -1024,3 +1053,10 @@ setupBtn('reset-stats', () => {
 loadDashboard();
 
 window.startTopicQuiz = startTopicQuiz;
+
+window.showImageFull = (src) => {
+    const modal = document.getElementById('image-modal');
+    const modalImg = document.getElementById('modal-img');
+    modalImg.src = src;
+    modal.classList.remove('hidden');
+};
