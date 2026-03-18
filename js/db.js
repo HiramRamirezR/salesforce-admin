@@ -10,6 +10,7 @@ const QUESTIONS_COL = "questions";
 const MASTERY_COL = "mastery_units"; 
 const STATS_COL = "stats"; 
 const HISTORY_COL = "history";
+const CAT_SCORES_COL = "category_scores";
 
 // Local Cache system to stay within Spark Plan (Free)
 let cachedUnits = null;
@@ -301,6 +302,30 @@ export async function updateUnitStatus(unitId, newStatus) {
     await updateDoc(docRef, { status: newStatus });
 }
 
+export async function updateCategoryHighScore(category, score) {
+    const docRef = doc(db, CAT_SCORES_COL, category);
+    const docSnap = await getDoc(docRef);
+    
+    if (docSnap.exists()) {
+        const currentHigh = docSnap.data().highScore || 0;
+        if (score > currentHigh) {
+            await setDoc(docRef, { highScore: score }, { merge: true });
+        }
+    } else {
+        await setDoc(docRef, { highScore: score });
+    }
+}
+
+async function getCategoryHighScores() {
+    const colRef = collection(db, CAT_SCORES_COL);
+    const snapshot = await getDocs(colRef);
+    const scores = {};
+    snapshot.forEach(doc => {
+        scores[doc.id] = doc.data().highScore;
+    });
+    return scores;
+}
+
 // Official weights definition
 const OFFICIAL_WEIGHTS = {
     "Data & Analytics Management": 17,
@@ -315,10 +340,11 @@ const OFFICIAL_WEIGHTS = {
 
 export async function getExamMasteryProgress() {
     const units = await getCachedUnits();
+    const highScores = await getCategoryHighScores();
     const progress = {};
     
     Object.keys(OFFICIAL_WEIGHTS).forEach(cat => {
-        progress[cat] = { total: 0, mastered: 0, weight: OFFICIAL_WEIGHTS[cat], units: [] };
+        progress[cat] = { total: 0, mastered: 0, weight: OFFICIAL_WEIGHTS[cat], units: [], highScore: highScores[cat] || 0 };
     });
 
     units.forEach(data => {
@@ -327,8 +353,10 @@ export async function getExamMasteryProgress() {
             progress[cat].total++;
             if (data.status === 'mastered') progress[cat].mastered++;
             progress[cat].units.push({
+                id: data.id,
                 concept: data.concept,
-                status: data.status
+                status: data.status,
+                category: data.category
             });
         }
     });

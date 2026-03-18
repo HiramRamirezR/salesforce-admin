@@ -15,6 +15,7 @@ let currentSessionConfig = {
 };
 let dialogueHistory = [];
 let isChallengeFromFlashcard = false;
+let currentTopicQuizCategory = null;
 
 // --- DOM Elements ---
 const views = {
@@ -166,6 +167,7 @@ async function renderGlobalMastery() {
                 <span>
                     <strong>${cat}</strong> 
                     <span style="color: var(--text-muted); font-size: 0.75rem;">(Weight: ${stats.weight || 0}%)</span>
+                    ${stats.highScore > 0 ? `<span style="margin-left:8px; display: inline-block; padding: 2px 6px; background: rgba(0, 161, 224, 0.1); border: 1px solid var(--primary); border-radius: 4px; font-size: 0.6rem; color: var(--primary); font-weight: 800;">TOP: ${stats.highScore}%</span>` : ''}
                 </span>
                 <span style="color: var(--warning); font-weight: 700;">${masteryPerc}% Mastered</span>
             </div>
@@ -176,7 +178,10 @@ async function renderGlobalMastery() {
                 <div style="font-size: 0.7rem; color: var(--text-muted);">
                     ${isLoaded ? `${stats.mastered} of ${stats.total} scenarios conquered` : 'No scenarios imported yet'}
                 </div>
-                ${isLoaded ? '<span style="font-size: 0.7rem; color: var(--primary); cursor: pointer;">View Details ▾</span>' : ''}
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    ${masteryPerc === 100 ? `<button class="btn-primary" style="padding: 4px 10px; font-size: 0.65rem; background: var(--warning); color: black;" onclick="event.stopPropagation(); startTopicQuiz('${cat}')">Final Quiz 🏆</button>` : ''}
+                    ${isLoaded ? '<span style="font-size: 0.7rem; color: var(--primary); cursor: pointer;">View Details ▾</span>' : ''}
+                </div>
             </div>
         `;
 
@@ -203,6 +208,15 @@ async function renderGlobalMastery() {
                 </div>
             `).join('');
 
+            // Attach click handlers to units
+            detailsPanel.querySelectorAll('.unit-detail-item').forEach((el, idx) => {
+                el.onclick = (e) => {
+                    e.stopPropagation(); // Avoid closing the accordion row
+                    const unit = sortedUnits[idx];
+                    jumpToFlashcard(unit.id, unit.category);
+                };
+            });
+
             masteryRow.onclick = () => {
                 detailsPanel.classList.toggle('open');
                 const label = masteryRow.querySelector('span:last-child');
@@ -219,6 +233,56 @@ async function renderGlobalMastery() {
 
         container.appendChild(wrapper);
     });
+}
+
+async function startTopicQuiz(topic) {
+    const units = await DB.getUnitsByTopic(topic);
+    if (units.length === 0) return;
+
+    // Show loading state (could be improved)
+    const btn = event.target;
+    const originalText = btn.textContent;
+    btn.textContent = "Generating...";
+    btn.disabled = true;
+
+    try {
+        currentTopicQuizCategory = topic;
+        const result = await evaluateMastery(null, null, [], 'quiz_generation', { concepts: units });
+        if (Array.isArray(result)) {
+            currentQuestions = result;
+            currentIndex = 0;
+            userAnswers = [];
+            
+            // Set a default timer for 10 questions (15 mins)
+            timeLeft = 15 * 60;
+            startTimer();
+            
+            showView('exam');
+            document.getElementById('exam-length-select').value = "10"; // Fake batch size
+            renderQuestion();
+        } else {
+            throw new Error("Invalid quiz format");
+        }
+    } catch (e) {
+        alert("Error generating quiz: " + e.message);
+    } finally {
+        btn.textContent = originalText;
+        btn.disabled = false;
+    }
+}
+
+async function jumpToFlashcard(unitId, category) {
+    const allUnits = await DB.getUnitsByTopic(category);
+    const unitIndex = allUnits.findIndex(u => u.id === unitId);
+    
+    if (unitIndex === -1) return;
+
+    // Set up study session beginning at this unit
+    masteryUnits = allUnits;
+    masteryIndex = unitIndex;
+    
+    showView('study');
+    renderStudyCard();
 }
 
 
@@ -310,7 +374,7 @@ function renderQuestion() {
         const div = document.createElement('div');
         div.className = 'option-item';
         div.innerHTML = `
-            <div class="checkbox-visual"></div>
+            <div class="checkbox-visual ${!isMultiple ? 'radio-visual' : ''}"></div>
             <span>${opt.text}</span>
         `;
         div.onclick = () => toggleOption(div, opt, isMultiple);
@@ -397,6 +461,11 @@ async function endExam() {
         mode,
         date: new Date().toLocaleDateString() + ' ' + new Date().toLocaleTimeString()
     });
+
+    if (currentTopicQuizCategory) {
+        await DB.updateCategoryHighScore(currentTopicQuizCategory, percentage);
+        currentTopicQuizCategory = null; 
+    }
 
     const badge = document.getElementById('simulation-badge');
     if (mode === 'simulation') {
@@ -645,7 +714,7 @@ function renderStudyCard() {
     const unit = masteryUnits[masteryIndex];
     
     // Update Counter in UI
-    const topic = document.getElementById('category-select').value;
+    const topic = unit.category;
     DB.getUnitsByTopic(topic).then(all => {
         const masteredCount = all.filter(u => u.status === 'mastered').length;
         document.getElementById('study-category').textContent = `${unit.category} | Mastered: ${masteredCount} / ${all.length}`;
@@ -953,3 +1022,5 @@ setupBtn('reset-stats', () => {
 
 // Initial Load
 loadDashboard();
+
+window.startTopicQuiz = startTopicQuiz;

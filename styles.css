@@ -205,6 +205,10 @@ button {
     border-color: var(--primary);
 }
 
+.radio-visual {
+    border-radius: 50% !important;
+}
+
 /* Progress Bar */
 .progress-container {
     height: 6px;
@@ -314,8 +318,15 @@ button {
     justify-content: space-between;
     align-items: center;
     font-size: 0.8rem;
-    padding: 8px 0;
+    padding: 8px 10px;
     border-bottom: 1px solid rgba(255,255,255,0.05);
+    cursor: pointer;
+    transition: var(--transition);
+    border-radius: 6px;
+}
+
+.unit-detail-item:hover {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .unit-detail-item:last-child {

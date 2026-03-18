@@ -41,6 +41,36 @@ exports.handler = async (event, context) => {
         "feedback": "Your Socratic response",
         "masteryIncrement": boolean (true ONLY if score == 100 and no previous history)
       }
+      4. Language: English.
+    `;
+  } else if (mode === 'quiz_generation') {
+    const { concepts } = JSON.parse(event.body);
+    sysInstruction = `
+      You are a Salesforce Certification Exam Writer. 
+      Generate 10 high-quality practice questions for the topic: "${concepts[0].category}".
+      Target Concepts: ${concepts.map(c => c.concept).join(", ")}.
+
+      RULES:
+      1. COMPOSITION: Generate 10 questions. 
+         - 70% must be Single Choice (Radio button style).
+         - 30% must be Multiple Choice (Select 2, 3, or 4 options correct).
+      2. FORMAT: 
+         - Use scenario-based questions (Business cases).
+         - Each question must have 4 or 5 options.
+         - For Multiple Choice, explicitly state "Choose 2", "Choose 3", etc. in the question text.
+      3. OUTPUT: MUST BE A VALID JSON ARRAY of questions with the following structure:
+      [
+        {
+          "question": "Scenario text... (Choose X)",
+          "category": "${concepts[0].category}",
+          "explanation": "Detailed why...",
+          "options": [
+            { "text": "Option A", "isCorrect": boolean },
+            { "text": "Option B", "isCorrect": boolean }
+          ]
+        }
+      ]
+      4. Language: English.
     `;
   } else {
     // STUDY MODE: Explaining Teacher
@@ -54,7 +84,7 @@ exports.handler = async (event, context) => {
       1. TEACHER MODE: Provide direct, high-impact explanations. Avoid long introductions.
       2. CONCISENESS: Limit your initial response to max 2-3 short paragraphs. Use bullet points for technical details.
       3. Encourage the user to ask follow-up questions if they need more depth.
-      4. Answer in the same language as the user's input (Spanish).
+      4. Answer in the same language as the user's input (English).
       5. JSON OUTPUT IS MANDATORY:
       {
         "score": 0,

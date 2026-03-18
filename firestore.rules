@@ -1,0 +1,32 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Permite leer y escribir en todas las colecciones necesarias para el estudio
+    match /mastery_units/{unitId} {
+      allow read, write: if true;
+    }
+    
+    match /questions/{questionId} {
+      allow read, write: if true;
+    }
+    
+    match /stats/{statId} {
+      allow read, write: if true;
+    }
+    
+    match /history/{historyId} {
+      allow read, write: if true;
+    }
+
+    match /category_scores/{categoryId} {
+      allow read, write: if true;
+    }
+
+    // Por seguridad, cualquier otra colección no mencionada sigue bloqueada
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

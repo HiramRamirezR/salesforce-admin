@@ -3,10 +3,11 @@ export async function evaluateMastery(userAnswer, unit, history = [], mode = 'ma
     // We now call our own secure Netlify Function instead of the direct Gemini API
 
     try {
+        const concepts = arguments[4]?.concepts; // Extra context if needed
         const response = await fetch('/.netlify/functions/evaluate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userAnswer, unit, history, mode })
+            body: JSON.stringify({ userAnswer, unit, history, mode, concepts })
         });
 
         if (!response.ok) {
