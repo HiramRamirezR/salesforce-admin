@@ -163,6 +163,8 @@ async function renderGlobalMastery() {
         const isLoaded = stats.total > 0;
         
         if (masteryPerc === 100) masteredTopics.push(cat);
+        const hasUnitFailures = stats.units.some(u => u.examFailures > 0);
+        const showRedDot = masteryPerc === 100 && hasUnitFailures;
         
         const wrapper = document.createElement('div');
         wrapper.style.marginBottom = '12px';
@@ -176,6 +178,7 @@ async function renderGlobalMastery() {
                     <strong>${cat}</strong> 
                     <span style="color: var(--text-muted); font-size: 0.75rem;">(Weight: ${stats.weight || 0}%)</span>
                     ${stats.highScore > 0 ? `<span style="margin-left:8px; display: inline-block; padding: 2px 6px; background: rgba(0, 161, 224, 0.1); border: 1px solid var(--primary); border-radius: 4px; font-size: 0.6rem; color: var(--primary); font-weight: 800;">TOP: ${stats.highScore}%</span>` : ''}
+                    ${showRedDot ? `<span style="margin-left: 8px; color: var(--error); font-size: 0.8rem;" title="False Mastery: Failures in Exams">🔴</span>` : ''}
                 </span>
                 <span style="color: var(--warning); font-weight: 700;">${masteryPerc}% Mastered</span>
             </div>
@@ -208,7 +211,7 @@ async function renderGlobalMastery() {
                 <div class="unit-detail-item">
                     <span>
                         <span class="status-dot ${u.status === 'mastered' ? 'status-mastered' : 'status-pending'}"></span>
-                        ${u.concept}
+                        ${u.concept} ${u.status === 'mastered' && u.examFailures > 0 ? `<span style="color: var(--error);" title="Mastered but failed in exam!">🔴</span>` : ''}
                     </span>
                     <span style="color: var(--text-muted); font-size: 0.7rem; opacity: 0.8;">
                         ${u.status === 'mastered' ? 'Mastered ✅' : 'In Progress'}
@@ -258,6 +261,23 @@ async function renderGlobalMastery() {
         mixedBtn.onclick = (e) => startMixedTopicQuiz(e, masteredTopics);
         mixedHeader.appendChild(mixedBtn);
     }
+
+    // Handle Weak Topics Quiz
+    const weakUnitsCount = Object.values(masteryStats).reduce((acc, cat) => acc + (cat.units ? cat.units.filter(u => u.examFailures > 0).length : 0), 0);
+    
+    if (weakUnitsCount > 0) {
+        const weakBtn = document.createElement('button');
+        weakBtn.className = 'btn-primary';
+        weakBtn.style.width = '100%';
+        weakBtn.style.marginTop = '10px';
+        weakBtn.style.background = 'linear-gradient(135deg, #e67e22, #c0392b)'; // Fire/Warning gradient
+        weakBtn.style.color = 'white';
+        weakBtn.style.fontWeight = '800';
+        weakBtn.style.padding = '12px';
+        weakBtn.innerHTML = `🔥 START WEAK CONCEPTS QUIZ (${weakUnitsCount} Concepts)`;
+        weakBtn.onclick = (e) => startWeakTopicsQuiz(e);
+        mixedHeader.appendChild(weakBtn);
+    }
 }
 
 async function startTopicQuiz(event, topic) {
@@ -277,6 +297,22 @@ async function startMixedTopicQuiz(event, topics) {
 
     if (allUnits.length === 0) return;
     return runQuizGeneration(btn, allUnits, "Mixed Mastery");
+}
+
+async function startWeakTopicsQuiz(event) {
+    const btn = event.target;
+    const stats = await DB.getExamMasteryProgress();
+    const weakUnits = [];
+    
+    Object.values(stats).forEach(cat => {
+        if (cat.units) {
+            const failed = cat.units.filter(u => u.examFailures > 0);
+            weakUnits.push(...failed);
+        }
+    });
+
+    if (weakUnits.length === 0) return;
+    return runQuizGeneration(btn, weakUnits, "Weak Concepts");
 }
 
 async function runQuizGeneration(btn, units, label) {
@@ -472,17 +508,12 @@ async function endExam() {
         const totalFailedCount = userAnswers.filter(a => !a.isCorrect).length;
         await DB.updateCategoryHighScore(currentTopicQuizCategory, percentage, totalFailedCount);
         
-        // If it was a mixed quiz, we ALSO attribute failures to the specific topics themselves
-        if (currentTopicQuizCategory === "Mixed Mastery") {
-            const failuresPerTopic = {};
-            userAnswers.forEach((ans, idx) => {
-                if (!ans.isCorrect) {
-                    const cat = currentQuestions[ans.qIndex].category || "General";
-                    failuresPerTopic[cat] = (failuresPerTopic[cat] || 0) + 1;
-                }
-            });
-            for (const [topic, count] of Object.entries(failuresPerTopic)) {
-                await DB.updateCategoryHighScore(topic, null, count);
+        // If there were failures, also attribute them to the specific concepts/units
+        const failedQuestions = userAnswers.filter(a => !a.isCorrect);
+        for (const ans of failedQuestions) {
+            const q = currentQuestions[ans.qIndex];
+            if (q.concept) {
+                await DB.recordUnitExamFailure(q.concept, q.category);
             }
         }
 

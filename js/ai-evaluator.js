@@ -11,8 +11,14 @@ export async function evaluateMastery(userAnswer, unit, history = [], mode = 'ma
         });
 
         if (!response.ok) {
-            const errData = await response.json();
-            throw new Error(errData.error || "Server error");
+            let errorMsg = "Server error";
+            try {
+                const errData = await response.json();
+                errorMsg = errData.error || errorMsg;
+            } catch (jsonErr) {
+                errorMsg = await response.text() || errorMsg;
+            }
+            throw new Error(errorMsg);
         }
 
         const responseText = (await response.text()).trim();

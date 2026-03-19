@@ -305,6 +305,20 @@ export async function updateUnitStatus(unitId, newStatus) {
     await updateDoc(docRef, { status: newStatus });
 }
 
+export async function recordUnitExamFailure(conceptName, category) {
+    const colRef = collection(db, MASTERY_COL);
+    const q = query(colRef, where("concept", "==", conceptName), where("category", "==", category));
+    const snapshot = await getDocs(q);
+    
+    if (!snapshot.empty) {
+        const docRef = doc(db, MASTERY_COL, snapshot.docs[0].id);
+        await updateDoc(docRef, {
+            examFailures: increment(1)
+        });
+        clearCache();
+    }
+}
+
 export async function updateCategoryHighScore(category, score, failedCount = 0) {
     const docRef = doc(db, CAT_SCORES_COL, category);
     const docSnap = await getDoc(docRef);
@@ -383,7 +397,8 @@ export async function getExamMasteryProgress() {
                 id: data.id,
                 concept: data.concept,
                 status: data.status,
-                category: data.category
+                category: data.category,
+                examFailures: data.examFailures || 0
             });
         }
     });

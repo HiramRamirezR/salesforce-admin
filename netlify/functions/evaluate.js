@@ -20,11 +20,14 @@ exports.handler = async (event, context) => {
     };
   }
 
-  // Model selection: gemini-1.5-flash is optimized for speed and fulfills these tasks well.
+  // Model selection: gemini-2.5-flash as requested by the user.
   const model = "gemini-2.5-flash";
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
   let sysInstruction = "";
+
+  // Ensure concepts is an array for safe processing
+  const safeConcepts = Array.isArray(concepts) ? concepts : [];
 
   if (mode === 'mastery') {
     sysInstruction = `
@@ -52,11 +55,11 @@ exports.handler = async (event, context) => {
       4. Language: English.
     `;
   } else if (mode === 'quiz_generation') {
-    const topic = concepts.length > 0 ? concepts[0].category : "Salesforce";
+    const topic = safeConcepts.length > 0 ? safeConcepts[0].category : "Salesforce";
     sysInstruction = `
       You are a Salesforce Certification Exam Writer. 
       Generate 10 high-quality practice questions for the topic: "${topic}".
-      Target Concepts: ${concepts.map(c => c.concept).join(", ")}.
+      Target Concepts: ${safeConcepts.map(c => c.concept).join(", ")}.
 
       RULES:
       1. COMPOSITION: Generate exactly 10 questions. 
@@ -70,6 +73,7 @@ exports.handler = async (event, context) => {
         {
           "question": "Scenario text... (Choose X)",
           "category": "${topic}",
+          "concept": "Name of the concept from the Target Concepts list",
           "explanation": "Detailed why...",
           "options": [
             { "text": "Option A", "isCorrect": boolean },
