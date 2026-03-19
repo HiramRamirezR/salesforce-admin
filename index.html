@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Salesforce Platform Admin Prep</title>
+    <link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Salesforce.com_logo.svg/960px-Salesforce.com_logo.svg.png">
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -12,10 +13,8 @@
 <body>
     <div class="container">
         <header>
-            <div class="logo">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M17.58 10.12C17.06 7.21 14.51 5 11.45 5c-2.4 0-4.49 1.37-5.5 3.4C3.41 8.86 1.5 11.05 1.5 13.67 1.5 16.61 3.89 19 6.83 19h10.34c2.67 0 4.83-2.16 4.83-4.83 0-2.58-1.99-4.57-4.42-4.05z" fill="#00A1E0"/>
-                </svg>
+            <div class="logo" id="main-logo" style="cursor: pointer;">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f9/Salesforce.com_logo.svg/960px-Salesforce.com_logo.svg.png" style="width: 40px; height: auto;">
                 <span>SF PLATFORM ADMIN</span>
             </div>
             <div id="exam-live-stats" class="hidden" style="display: flex; gap: 15px; font-size: 0.9rem; font-weight: 700;">
@@ -53,26 +52,14 @@
                     </div>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">
-                    <div>
-                        <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">Study Category:</label>
-                        <select id="category-select" style="background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border); padding: 10px; border-radius: 8px; width: 100%; cursor: pointer; font-weight: 600;">
-                            <option value="all">All Categories (Mixed)</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">Practice Mode:</label>
-                        <select id="exam-length-select" style="background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border); padding: 10px; border-radius: 8px; width: 100%; cursor: pointer; font-weight: 600;">
-                            <option value="10">Standard Batch (10 Scenarios)</option>
-                            <option value="20">Deep Practice (20 Scenarios)</option>
-                            <option value="all">Full Category Review</option>
-                        </select>
-
-                    </div>
+                <div style="margin-bottom: 24px;">
+                    <label style="display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">Study Category:</label>
+                    <select id="category-select" style="background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border); padding: 10px; border-radius: 8px; width: 100%; cursor: pointer; font-weight: 600;">
+                        <option value="all">All Topics (Mixed)</option>
+                    </select>
                 </div>
 
                 <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-                    <button class="btn-primary" id="start-mastery-btn" style="background: var(--warning); color: black; font-weight: 800; padding: 16px 32px;">🏆 START MASTERY PRACTICE (HARD)</button>
                     <button class="btn-outline" id="start-study-btn" style="border-color: var(--warning); color: var(--warning);">⚡ Study Flashcards</button>
                     <button class="btn-outline" id="go-to-import">Import Units</button>
                     <button class="btn-outline" id="reset-stats" style="border-color: var(--error); color: var(--error); opacity: 0.6; font-size: 0.7rem;">Reset Stats</button>
@@ -84,6 +71,7 @@
                 <!-- PADRE FEATURE: Mastery Breakdown -->
                 <div id="mastery-section" style="margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border);">
                     <h3 style="margin-bottom: 16px; font-size: 1rem;">Topic Mastery Progress</h3>
+                    <div id="mixed-quiz-header" style="margin-bottom: 20px;"></div>
                     <div id="mastery-bars-container" style="display: flex; flex-direction: column; gap: 12px;">
                         <!-- Mastery per category bars -->
                     </div>
@@ -162,7 +150,7 @@
         <!-- RESULTS VIEW -->
         <section id="results-view" class="hidden">
             <div class="card text-center">
-                <div id="simulation-badge" class="hidden" style="display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 0.8rem; font-weight: 800; margin-bottom: 12px; text-transform: uppercase;">Simulation</div>
+
                 <h1 style="font-size: 3rem; margin-bottom: 8px;" id="final-percentage">0%</h1>
                 <p style="font-size: 1.25rem; font-weight: 600; margin-bottom: 24px;" id="result-message">Great effort!</p>
 
@@ -197,6 +185,7 @@
                         <button class="btn-primary" id="study-next-btn">Next Card ➔</button>
                     </div>
                     <button class="btn-primary" id="study-challenge-btn" style="width: 100%; background: linear-gradient(135deg, #f1c40f, #e67e22); color: black;">Challenge Mastery 🏆</button>
+
 
                     <!-- Tutor Chat in Flashcards -->
                     <div id="study-tutor-area" style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
@@ -247,6 +236,8 @@
                 </div>
             </div>
         </section>
+
+
 
         <!-- REVIEW VIEW -->
 

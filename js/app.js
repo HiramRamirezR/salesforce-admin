@@ -9,13 +9,13 @@ let timerInterval = null;
 let timeLeft = 52.5 * 60; // 52 minutes and 30 seconds
 let sessionStartTime = null; 
 let studyTicker = null;
-let currentSessionConfig = {
-    mode: 'all', // all or unmastered
-    type: 'flashcards' // flashcards or mastery
-};
 let dialogueHistory = [];
+let localTutorHistories = new Map(); // questionId -> history array
 let isChallengeFromFlashcard = false;
 let currentTopicQuizCategory = null;
+let currentMasteryUnit = null;
+let masteryUnits = [];
+let masteryIndex = 0;
 
 // --- DOM Elements ---
 const views = {
@@ -61,6 +61,8 @@ function showView(viewName) {
 
     Object.values(views).forEach(v => v.classList.add('hidden'));
     views[viewName].classList.remove('hidden');
+    
+    if (viewName === 'home') loadDashboard();
     
     if (viewName === 'exam' || viewName === 'study') {
         startSessionTimer();
@@ -138,6 +140,8 @@ async function renderGlobalMastery() {
     const masteryStats = await DB.getExamMasteryProgress();
     const container = document.getElementById('mastery-bars-container');
     container.innerHTML = '';
+    const mixedHeader = document.getElementById('mixed-quiz-header');
+    mixedHeader.innerHTML = '';
 
     // Official topics in order
     const topics = [
@@ -151,10 +155,14 @@ async function renderGlobalMastery() {
         "Agentforce AI"
     ];
 
+    const masteredTopics = [];
+
     topics.forEach(cat => {
         const stats = masteryStats[cat] || { total: 0, mastered: 0, weight: 0, units: [] };
         const masteryPerc = stats.total > 0 ? Math.round((stats.mastered / stats.total) * 100) : 0;
         const isLoaded = stats.total > 0;
+        
+        if (masteryPerc === 100) masteredTopics.push(cat);
         
         const wrapper = document.createElement('div');
         wrapper.style.marginBottom = '12px';
@@ -230,24 +238,59 @@ async function renderGlobalMastery() {
         } else {
             wrapper.appendChild(masteryRow);
         }
-
         container.appendChild(wrapper);
     });
+
+    // Handle Mixed Quiz Button
+    if (masteredTopics.length >= 2) {
+        const lastScore = masteryStats._mixed_?.lastScore;
+        const scoreLabel = lastScore !== null && lastScore !== undefined ? `<br><span style="font-size: 0.7rem; opacity: 0.8;">LAST SCORE: ${lastScore}%</span>` : "";
+        
+        const mixedBtn = document.createElement('button');
+        mixedBtn.className = 'btn-primary';
+        mixedBtn.style.width = '100%';
+        mixedBtn.style.background = 'linear-gradient(135deg, #00A1E0, #8E44AD)'; // Mixed gradient
+        mixedBtn.style.color = 'white';
+        mixedBtn.style.fontWeight = '800';
+        mixedBtn.style.padding = '12px';
+        mixedBtn.style.lineHeight = '1.2';
+        mixedBtn.innerHTML = `🎓 START MIXED FINAL QUIZ (${masteredTopics.length} Topics)${scoreLabel}`;
+        mixedBtn.onclick = (e) => startMixedTopicQuiz(e, masteredTopics);
+        mixedHeader.appendChild(mixedBtn);
+    }
 }
 
 async function startTopicQuiz(event, topic) {
     const units = await DB.getUnitsByTopic(topic);
     if (units.length === 0) return;
+    return runQuizGeneration(event.target, units, topic);
+}
 
-    // Show loading state (could be improved)
+async function startMixedTopicQuiz(event, topics) {
     const btn = event.target;
+    const allUnits = [];
+    
+    for (const topic of topics) {
+        const units = await DB.getUnitsByTopic(topic);
+        allUnits.push(...units);
+    }
+
+    if (allUnits.length === 0) return;
+    return runQuizGeneration(btn, allUnits, "Mixed Mastery");
+}
+
+async function runQuizGeneration(btn, units, label) {
     const originalText = btn.textContent;
-    btn.textContent = "Generating...";
+    btn.textContent = "Generating Quiz...";
     btn.disabled = true;
 
     try {
-        currentTopicQuizCategory = topic;
-        const result = await evaluateMastery(null, null, [], 'quiz_generation', { concepts: units });
+        currentTopicQuizCategory = label;
+        // Optimization: if there are TOO many units (e.g. 100), maybe shuffle and pick a subset for the prompt
+        // to stay within context limits and keep AI focused.
+        const pool = units.length > 30 ? units.sort(() => 0.5 - Math.random()).slice(0, 30) : units;
+
+        const result = await evaluateMastery(null, null, [], 'quiz_generation', { concepts: pool });
         if (Array.isArray(result)) {
             currentQuestions = result;
             currentIndex = 0;
@@ -258,13 +301,14 @@ async function startTopicQuiz(event, topic) {
             startTimer();
             
             showView('exam');
-            document.getElementById('exam-length-select').value = "10"; // Fake batch size
+            updateLiveStats();
             renderQuestion();
         } else {
             const errorMsg = result.feedback || "Invalid quiz format received from AI.";
             throw new Error(errorMsg);
         }
     } catch (e) {
+        console.error(e);
         alert("Error generating quiz: " + e.message);
     } finally {
         btn.textContent = originalText;
@@ -301,46 +345,7 @@ async function updateCategoryPool() {
 
 
 // --- Exam Logic ---
-async function startExam() {
-    const lengthSelect = document.getElementById('exam-length-select');
-    const mode = lengthSelect.value;
-    let totalToFetch = 30;
-    
-    if (mode === 'survival' || mode === 'simulation') totalToFetch = 65;
-    else totalToFetch = parseInt(mode) || 30;
-    
-    const catSelect = document.getElementById('category-select');
-    const selectedCategory = catSelect.value;
-    
-    currentQuestions = await DB.getExamQuestions(totalToFetch, selectedCategory);
-    
-    if (currentQuestions.length === 0) {
-        alert("No questions found for this category or the bank is empty.");
-        return;
-    }
 
-    currentIndex = 0;
-    userAnswers = [];
-    
-    if (mode === 'survival') {
-        timeLeft = 0;
-        document.getElementById('timer').classList.add('hidden');
-    } else if (mode === 'simulation') {
-        timeLeft = 105 * 60; // Official 105 mins
-        document.getElementById('timer').classList.remove('hidden');
-    } else {
-        timeLeft = Math.floor(currentQuestions.length * 1.75 * 60);
-        document.getElementById('timer').classList.remove('hidden');
-    }
-
-    
-    updateLiveStats();
-    if (mode !== 'survival') startTimer();
-
-
-    showView('exam');
-    renderQuestion();
-}
 
 
 function startTimer() {
@@ -408,21 +413,18 @@ async function validateAnswer(isMultiple) {
     if (selectedElements.length === 0) return;
 
     const q = currentQuestions[currentIndex];
-    const mode = document.getElementById('exam-length-select').value;
+    const mode = 'standard';
     const correctAnswers = q.options.filter(o => o.isCorrect).map(o => o.text);
     const selectedAnswers = Array.from(selectedElements).map(el => el.querySelector('span').textContent);
 
     const isCorrect = correctAnswers.length === selectedAnswers.length && 
                       correctAnswers.every(val => selectedAnswers.includes(val));
 
-    // UI Feedback (Hidden in simulation until the end)
-    if (mode !== 'simulation') {
-        document.querySelectorAll('.option-item').forEach(el => {
-            const text = el.querySelector('span').textContent;
-            if (correctAnswers.includes(text)) el.classList.add('correct');
-            else if (selectedAnswers.includes(text)) el.classList.add('error');
-        });
-    }
+    document.querySelectorAll('.option-item').forEach(el => {
+        const text = el.querySelector('span').textContent;
+        if (correctAnswers.includes(text)) el.classList.add('correct');
+        else if (selectedAnswers.includes(text)) el.classList.add('error');
+    });
 
     userAnswers.push({ qIndex: currentIndex, isCorrect, explanation: q.explanation });
 
@@ -435,15 +437,7 @@ async function validateAnswer(isMultiple) {
         await DB.updateMastery(q.id, isCorrect);
     }
 
-    // Survival Check
-    if (mode === 'survival' && !isCorrect) {
 
-        setTimeout(() => {
-            alert("☠️ SURVIVAL ENDED: One mistake and you're out!");
-            endExam();
-        }, 1000);
-        return;
-    }
 
     const nextBtn = document.getElementById('next-q-btn');
 
@@ -463,7 +457,7 @@ async function endExam() {
     const score = userAnswers.filter(a => a.isCorrect).length;
     const total = currentQuestions.length;
     const percentage = Math.round((score / total) * 100);
-    const mode = document.getElementById('exam-length-select').value;
+    const mode = 'standard';
     
     // Save to Firestore History
     await DB.saveExamResult({
@@ -475,21 +469,27 @@ async function endExam() {
     });
 
     if (currentTopicQuizCategory) {
-        await DB.updateCategoryHighScore(currentTopicQuizCategory, percentage);
+        const totalFailedCount = userAnswers.filter(a => !a.isCorrect).length;
+        await DB.updateCategoryHighScore(currentTopicQuizCategory, percentage, totalFailedCount);
+        
+        // If it was a mixed quiz, we ALSO attribute failures to the specific topics themselves
+        if (currentTopicQuizCategory === "Mixed Mastery") {
+            const failuresPerTopic = {};
+            userAnswers.forEach((ans, idx) => {
+                if (!ans.isCorrect) {
+                    const cat = currentQuestions[ans.qIndex].category || "General";
+                    failuresPerTopic[cat] = (failuresPerTopic[cat] || 0) + 1;
+                }
+            });
+            for (const [topic, count] of Object.entries(failuresPerTopic)) {
+                await DB.updateCategoryHighScore(topic, null, count);
+            }
+        }
+
         currentTopicQuizCategory = null; 
     }
 
-    const badge = document.getElementById('simulation-badge');
-    if (mode === 'simulation') {
-        badge.classList.remove('hidden');
-        const passed = percentage >= 65;
-        badge.style.background = passed ? 'var(--success)' : 'var(--error)';
-        badge.textContent = passed ? 'SIMULATION: PASS ✅' : 'SIMULATION: FAIL ❌';
-        document.getElementById('result-message').textContent = passed ? "You're ready for the real deal!" : "Close! Review your weak areas.";
-    } else {
-        badge.classList.add('hidden');
-        document.getElementById('result-message').textContent = percentage >= 80 ? "Certified Ready! 🚀" : "Keep practicing, Trailblazer!";
-    }
+    document.getElementById('result-message').textContent = percentage >= 80 ? "Certified Ready! 🚀" : "Keep practicing, Trailblazer!";
 
     document.getElementById('final-percentage').textContent = `${percentage}%`;
 
@@ -543,10 +543,30 @@ function renderReview() {
             div.className = 'review-item';
             div.innerHTML = `
                 <p style="font-weight: 700; margin-bottom: 8px;">${q.question}</p>
-                <div class="explanation-box">
+                <div class="explanation-box" style="margin-bottom: 12px;">
                     <strong>Explanation:</strong> ${q.explanation}
                 </div>
+                <!-- Tutor Chat for Review -->
+                <div class="card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 12px;">
+                    <div class="tutor-chat hidden" style="margin-bottom: 15px; padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.05); font-size: 0.85rem; text-align: left; max-height: 200px; overflow-y: auto;"></div>
+                    <div style="display: flex; gap: 10px;">
+                        <input type="text" class="tutor-input" style="flex: 1; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); padding: 8px 12px; font-size: 0.85rem;" placeholder="Ask why this was wrong...">
+                        <button class="btn-outline tutor-ask-btn" style="padding: 8px 16px; font-size: 0.8rem;">Ask Tutor</button>
+                    </div>
+                </div>
             `;
+
+            // Attach tutor logic
+            const input = div.querySelector('.tutor-input');
+            const chat = div.querySelector('.tutor-chat');
+            const btn = div.querySelector('.tutor-ask-btn');
+            
+            btn.onclick = () => {
+                const query = input.value.trim();
+                if (!query) return;
+                askTutor(query, q, chat, btn, input);
+            };
+
             list.appendChild(div);
         }
     });
@@ -561,7 +581,8 @@ const setupBtn = (id, fn) => {
     if (el) el.onclick = fn;
 };
 
-setupBtn('start-exam-btn', startExam);
+
+setupBtn('main-logo', () => showView('home'));
 setupBtn('start-study-btn', startStudy);
 setupBtn('go-to-mistakes', loadMistakeBank);
 setupBtn('mistakes-back-home', () => showView('home'));
@@ -591,17 +612,39 @@ async function loadMistakeBank() {
     struggling.forEach(q => {
         const div = document.createElement('div');
         div.className = 'card';
-        div.style.marginBottom = '12px';
+        div.style.marginBottom = '20px';
         div.innerHTML = `
             <span class="category-tag">${q.category}</span>
             <p style="font-weight: 700; margin: 10px 0;">${q.question}</p>
-            <div class="explanation-box" style="font-size: 0.85rem;">
+            <div class="explanation-box" style="font-size: 0.85rem; margin-bottom: 12px;">
                 <strong>Explanation:</strong> ${q.explanation}
             </div>
-            <div style="font-size: 0.75rem; color: var(--error); margin-top: 10px;">
-                Mastery: ${q.masteryCount}/5 hits | Attempts: ${q.attempts}
+            
+            <!-- Tutor Chat for Mistake Bank -->
+            <div style="border-top: 1px solid var(--border); padding-top: 15px; margin-top: 10px;">
+                <div class="tutor-chat hidden" style="margin-bottom: 15px; padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.05); font-size: 0.85rem; text-align: left; max-height: 200px; overflow-y: auto;"></div>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" class="tutor-input" style="flex: 1; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); padding: 8px 12px; font-size: 0.85rem;" placeholder="Deep dive into this concept...">
+                    <button class="btn-outline tutor-ask-btn" style="padding: 8px 16px; font-size: 0.8rem;">Ask Tutor</button>
+                </div>
+            </div>
+
+            <div style="font-size: 0.75rem; color: var(--error); margin-top: 15px; border-top: 1px solid var(--card-bg); padding-top: 5px;">
+                Mastery Record: ${q.masteryCount}/5 hits | Total Attempts: ${q.attempts}
             </div>
         `;
+
+        // Attach tutor logic
+        const input = div.querySelector('.tutor-input');
+        const chat = div.querySelector('.tutor-chat');
+        const btn = div.querySelector('.tutor-ask-btn');
+        
+        btn.onclick = () => {
+            const query = input.value.trim();
+            if (!query) return;
+            askTutor(query, q, chat, btn, input);
+        };
+
         container.appendChild(div);
     });
 }
@@ -626,45 +669,86 @@ setupBtn('study-ask-btn', askFlashcardTutor);
 
 async function askFlashcardTutor() {
     const input = document.getElementById('study-tutor-input');
-    const chat = document.getElementById('study-tutor-chat');
-    const btn = document.getElementById('study-ask-btn');
     const question = input.value.trim();
     if (!question) return;
 
-    btn.disabled = true;
-    btn.textContent = "...";
+    const chat = document.getElementById('study-tutor-chat');
+    const btn = document.getElementById('study-ask-btn');
+    const unit = masteryUnits[masteryIndex];
+
+    askTutor(question, unit, chat, btn, input);
+}
+
+/**
+ * GENERIC AI TUTOR LOGIC
+ * Can be used for flashcards, post-exam review, or mistake bank
+ */
+async function askTutor(query, context, chatElement, btnElement, inputElement) {
+    btnElement.disabled = true;
+    btnElement.textContent = "...";
     
-    // Add user question to UI
-    chat.classList.remove('hidden');
+    // UI Update
+    chatElement.classList.remove('hidden');
     const userMsg = document.createElement('div');
     userMsg.style.marginBottom = '10px';
-    userMsg.innerHTML = `<strong style="color: var(--primary);">You:</strong> ${question}`;
-    chat.appendChild(userMsg);
-    input.value = '';
+    userMsg.innerHTML = `<strong style="color: var(--primary);">You:</strong> ${query}`;
+    chatElement.appendChild(userMsg);
+    if (inputElement) inputElement.value = '';
+
+    // Scroll to bottom
+    chatElement.scrollTop = chatElement.scrollHeight;
+
+    // Manage Isolated History per question
+    const historyId = context.id || context.question; // Use ID if available, fallback to question text
+    if (!localTutorHistories.has(historyId)) {
+        localTutorHistories.set(historyId, []);
+    }
+    const currentHistory = localTutorHistories.get(historyId);
 
     try {
-        const unit = masteryUnits[masteryIndex];
-        // In Flashcards, we want an 'explaining teacher' mode
-        const result = await evaluateMastery(question, unit, dialogueHistory, 'study');
+        // ... (normalization)
+        // [skipping normalization logic match in target content for brevity, using exact match below]
+        
+        let normalizedUnit = context;
+        if (!context.concept && context.question) {
+            normalizedUnit = {
+                concept: context.question,
+                referenceAnswer: context.explanation,
+                category: context.category,
+                keyTerms: []
+            };
+        } else if (context.flashcard) {
+            normalizedUnit = {
+                ...context,
+                referenceAnswer: `${context.flashcard.definition}\n\nUse Cases: ${context.flashcard.useCases.join(', ')}\n\nELI5: ${context.flashcard.ELI5}`
+            };
+        }
+
+        const result = await evaluateMastery(query, normalizedUnit, currentHistory, 'study');
         
         // Add to history
-        dialogueHistory.push({ role: 'user', content: question });
-        dialogueHistory.push({ role: 'assistant', content: result.feedback });
+        currentHistory.push({ role: 'user', content: query });
+        currentHistory.push({ role: 'assistant', content: result.feedback });
 
         // Add assistant reply to UI
         const assistantMsg = document.createElement('div');
         assistantMsg.style.marginBottom = '10px';
         assistantMsg.innerHTML = `<strong style="color: var(--warning);">Tutor:</strong> ${result.feedback}`;
-        chat.appendChild(assistantMsg);
+        chatElement.appendChild(assistantMsg);
         
         // Scroll to bottom
-        chat.scrollTop = chat.scrollHeight;
+        chatElement.scrollTop = chatElement.scrollHeight;
 
     } catch (e) {
-        alert("Error: " + e.message);
+        console.error(e);
+        const errDiv = document.createElement('div');
+        errDiv.style.color = 'var(--error)';
+        errDiv.style.fontSize = '0.75rem';
+        errDiv.textContent = "Error: " + e.message;
+        chatElement.appendChild(errDiv);
     } finally {
-        btn.disabled = false;
-        btn.textContent = "Ask Tutor";
+        btnElement.disabled = false;
+        btnElement.textContent = "Ask Tutor";
     }
 }
 
@@ -686,28 +770,12 @@ function startFlashcardChallenge() {
     renderMasteryScenario();
 }
 
-// --- Session Config ---
-function showSessionConfig(type) {
-    currentSessionConfig.type = type;
-    const topic = document.getElementById('category-select').value;
-    
-    // Simple UI prompt for now
-    const choice = confirm(`Topic: ${topic}\n\nDo you want to study ONLY unmastered cards?\n\n(OK = Unmastered Only, Cancel = All)`);
-    currentSessionConfig.mode = choice ? 'unmastered' : 'all';
-    
-    if (type === 'flashcards') startStudy();
-    else startMasteryPractice();
-}
 
 async function startStudy() {
     const topic = document.getElementById('category-select').value;
     let allUnits = await DB.getUnitsByTopic(topic);
     
-    if (currentSessionConfig.mode === 'unmastered') {
-        masteryUnits = allUnits.filter(u => u.status !== 'mastered');
-    } else {
-        masteryUnits = allUnits;
-    }
+    masteryUnits = allUnits;
     
     if (masteryUnits.length === 0) {
         alert("No units found matching your criteria.");
@@ -861,12 +929,32 @@ setupBtn('import-submit', async () => {
     }
 });
 
-// --- MASTERY PRACTICE LOGIC ---
-let currentMasteryUnit = null;
-let masteryUnits = [];
-let masteryIndex = 0;
 
-setupBtn('start-mastery-btn', startMasteryPractice);
+
+
+setupBtn('reset-stats', () => {
+    const confirmation = prompt("⚠️ ATTENTION: This will reset all your progress and stats.\nIF YOU ARE SURE, TYPE 'BORRAR' BELOW:");
+    if (confirmation === 'BORRAR') {
+        localStorage.removeItem('sf_scores');
+        alert("Stats reset. Reloading...");
+        location.reload();
+    }
+});
+
+
+// Initial Load
+loadDashboard();
+
+window.startTopicQuiz = startTopicQuiz;
+
+window.showImageFull = (src) => {
+    const modal = document.getElementById('image-modal');
+    const modalImg = document.getElementById('modal-img');
+    modalImg.src = src;
+    modal.classList.remove('hidden');
+};
+
+// --- MASTERY PRACTICE LOGIC ---
 setupBtn('mp-submit-btn', submitMasteryAnswer);
 setupBtn('mp-next-btn', () => {
     if (isChallengeFromFlashcard) {
@@ -907,36 +995,12 @@ setupBtn('mp-exit-btn', () => {
     }
 });
 
-async function startMasteryPractice() {
-    const topic = document.getElementById('category-select').value;
-    let allUnits = await DB.getUnitsByTopic(topic);
-    
-    // Mastery Practice is ALWAYS unmastered by default to optimize time
-    masteryUnits = allUnits.filter(u => u.status !== 'mastered');
-
-    if (masteryUnits.length === 0) {
-        if (allUnits.length > 0) {
-            alert("Congratulations! You have mastered all units in this topic. 🏆");
-        } else {
-            alert("No units found in this category.");
-        }
-        return;
-    }
-    
-    // ALWAYS SHUFFLE
-    masteryUnits = masteryUnits.sort(() => 0.5 - Math.random());
-
-    masteryIndex = 0;
-    showView('masteryPractice');
-    renderMasteryScenario();
-}
-
 function renderMasteryScenario() {
     currentMasteryUnit = masteryUnits[masteryIndex];
     dialogueHistory = []; // Reset dialogue for new scenario
     
     // Update Counter in UI
-    const topic = document.getElementById('category-select').value;
+    const topic = document.getElementById('category-select')?.value || currentMasteryUnit.category;
     DB.getUnitsByTopic(topic).then(all => {
         const masteredCount = all.filter(u => u.status === 'mastered').length;
         document.getElementById('mp-category').textContent = `${currentMasteryUnit.category} | Mastered: ${masteredCount} / ${all.length}`;
@@ -1042,24 +1106,3 @@ setupBtn('mp-give-up-btn', () => {
 });
 
 setupBtn('mp-retry-btn', renderMasteryScenario);
-
-
-setupBtn('reset-stats', () => {
-    if (confirm("Are you sure? This will delete all local scores and reset counts.")) {
-        localStorage.removeItem('sf_scores');
-        location.reload();
-    }
-});
-
-
-// Initial Load
-loadDashboard();
-
-window.startTopicQuiz = startTopicQuiz;
-
-window.showImageFull = (src) => {
-    const modal = document.getElementById('image-modal');
-    const modalImg = document.getElementById('modal-img');
-    modalImg.src = src;
-    modal.classList.remove('hidden');
-};

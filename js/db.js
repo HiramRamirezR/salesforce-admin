@@ -101,6 +101,7 @@ export async function updateMastery(questionId, isCorrect) {
         updates.correctCount = increment(1);
     }
     await updateDoc(qRef, updates);
+    clearCache();
 }
 
 
@@ -285,6 +286,7 @@ export async function updateUnitMastery(unitId, isMasteryPoint) {
             attempts: increment(1),
             lastAttempt: new Date()
         });
+        clearCache();
         return { newProgress: 5, newStatus: 'mastered' };
     } else {
         // If they failed the first attempt, we could track it or just leave it
@@ -293,6 +295,7 @@ export async function updateUnitMastery(unitId, isMasteryPoint) {
             lastAttempt: new Date(),
             status: 'practicing'
         });
+        clearCache();
         return { newStatus: 'practicing' };
     }
 }
@@ -302,28 +305,41 @@ export async function updateUnitStatus(unitId, newStatus) {
     await updateDoc(docRef, { status: newStatus });
 }
 
-export async function updateCategoryHighScore(category, score) {
+export async function updateCategoryHighScore(category, score, failedCount = 0) {
     const docRef = doc(db, CAT_SCORES_COL, category);
     const docSnap = await getDoc(docRef);
     
+    const updates = { 
+        failedCount: increment(failedCount)
+    };
+    
+    if (typeof score === 'number') {
+        updates.lastScore = score;
+    }
+
     if (docSnap.exists()) {
         const currentHigh = docSnap.data().highScore || 0;
-        if (score > currentHigh) {
-            await setDoc(docRef, { highScore: score }, { merge: true });
+        if (typeof score === 'number' && score > currentHigh) {
+            updates.highScore = score;
         }
+        await updateDoc(docRef, updates);
     } else {
-        await setDoc(docRef, { highScore: score });
+        await setDoc(docRef, { 
+            highScore: typeof score === 'number' ? score : 0, 
+            lastScore: typeof score === 'number' ? score : 0, 
+            failedCount: failedCount 
+        });
     }
 }
 
-async function getCategoryHighScores() {
+async function getCategoryScores() {
     const colRef = collection(db, CAT_SCORES_COL);
     const snapshot = await getDocs(colRef);
-    const scores = {};
+    const data = {};
     snapshot.forEach(doc => {
-        scores[doc.id] = doc.data().highScore;
+        data[doc.id] = doc.data();
     });
-    return scores;
+    return data;
 }
 
 // Official weights definition
@@ -340,11 +356,22 @@ const OFFICIAL_WEIGHTS = {
 
 export async function getExamMasteryProgress() {
     const units = await getCachedUnits();
-    const highScores = await getCategoryHighScores();
-    const progress = {};
+    const scoresData = await getCategoryScores();
+    const progress = {
+        _mixed_: scoresData["Mixed Mastery"] || { lastScore: null, failedCount: 0 }
+    };
     
     Object.keys(OFFICIAL_WEIGHTS).forEach(cat => {
-        progress[cat] = { total: 0, mastered: 0, weight: OFFICIAL_WEIGHTS[cat], units: [], highScore: highScores[cat] || 0 };
+        const catData = scoresData[cat] || { highScore: 0, lastScore: null, failedCount: 0 };
+        progress[cat] = { 
+            total: 0, 
+            mastered: 0, 
+            weight: OFFICIAL_WEIGHTS[cat], 
+            units: [], 
+            highScore: catData.highScore, 
+            lastScore: catData.lastScore,
+            failedCount: catData.failedCount || 0 
+        };
     });
 
     units.forEach(data => {
