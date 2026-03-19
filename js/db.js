@@ -305,17 +305,29 @@ export async function updateUnitStatus(unitId, newStatus) {
     await updateDoc(docRef, { status: newStatus });
 }
 
-export async function recordUnitExamFailure(conceptName, category) {
+export async function recordUnitExamFailure(conceptString, category) {
     const colRef = collection(db, MASTERY_COL);
-    const q = query(colRef, where("concept", "==", conceptName), where("category", "==", category));
-    const snapshot = await getDocs(q);
+    // Split by comma in case the AI combined multiple concepts
+    const conceptNames = conceptString.split(',').map(c => c.trim());
     
-    if (!snapshot.empty) {
-        const docRef = doc(db, MASTERY_COL, snapshot.docs[0].id);
-        await updateDoc(docRef, {
-            examFailures: increment(1)
-        });
-        clearCache();
+    for (const conceptName of conceptNames) {
+        // Try exact match first
+        const q = query(colRef, where("concept", "==", conceptName), where("category", "==", category));
+        let snapshot = await getDocs(q);
+        
+        // If not found, try a more flexible match
+        if (snapshot.empty) {
+            const q2 = query(colRef, where("concept", "==", conceptName));
+            snapshot = await getDocs(q2);
+        }
+
+        if (!snapshot.empty) {
+            const docRef = doc(db, MASTERY_COL, snapshot.docs[0].id);
+            await updateDoc(docRef, {
+                examFailures: increment(1)
+            });
+            clearCache();
+        }
     }
 }
 

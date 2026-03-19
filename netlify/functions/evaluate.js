@@ -140,45 +140,17 @@ exports.handler = async (event, context) => {
       }
     };
 
-    // This function is intended to be a helper for database operations.
-    // For a Netlify function, it would typically be defined outside the handler
-    // or imported from another file. If it relies on 'db', 'collection', etc.,
-    // those would also need to be imported/defined in this scope.
-    // As per the instruction, it's placed here, but note the typical structure.
-    // Assuming 'db', 'collection', 'where', 'query', 'getDocs', 'doc', 'updateDoc',
-    // 'increment', 'MASTERY_COL', 'clearCache' are defined or imported elsewhere
-    // in the actual project setup for this file to be syntactically correct.
-    async function recordUnitExamFailure(conceptString, category) {
-        // Placeholder for actual Firebase/Firestore imports and initialization
-        // const { db, collection, where, query, getDocs, doc, updateDoc, increment } = require('./firebase-config'); // Example
-        // const MASTERY_COL = "mastery"; // Example
-        // const clearCache = () => {}; // Example
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
 
-        const colRef = collection(db, MASTERY_COL);
-        // Split by comma in case the AI combined multiple concepts
-        const conceptNames = conceptString.split(',').map(c => c.trim());
-        
-        for (const conceptName of conceptNames) {
-            // Try exact match first
-            const q = query(colRef, where("concept", "==", conceptName), where("category", "==", category));
-            let snapshot = await getDocs(q);
-            
-            // If not found, try a more flexible match (if possible with Firestore)
-            // For now, let's stick to exact or name-based if categorized is too strict
-            if (snapshot.empty) {
-                const q2 = query(colRef, where("concept", "==", conceptName));
-                snapshot = await getDocs(q2);
-            }
-
-            if (!snapshot.empty) {
-                const docRef = doc(db, MASTERY_COL, snapshot.docs[0].id);
-                await updateDoc(docRef, {
-                    examFailures: increment(1)
-                });
-                clearCache();
-            }
-        }
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Gemini API error (${response.status}): ${errorText}`);
     }
+
     const data = await response.json();
 
     if (!data.candidates || !data.candidates[0].content.parts[0].text) {
