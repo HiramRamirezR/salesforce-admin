@@ -462,7 +462,12 @@ async function validateAnswer(isMultiple) {
         else if (selectedAnswers.includes(text)) el.classList.add('error');
     });
 
-    userAnswers.push({ qIndex: currentIndex, isCorrect, explanation: q.explanation });
+    userAnswers.push({ 
+        qIndex: currentIndex, 
+        isCorrect, 
+        explanation: q.explanation,
+        selectedAnswers: selectedAnswers 
+    });
 
 
     // Update Live Stats
@@ -517,6 +522,15 @@ async function endExam() {
             }
         }
 
+        // Clean up successes
+        const correctAnswers = userAnswers.filter(a => a.isCorrect);
+        for (const ans of correctAnswers) {
+            const q = currentQuestions[ans.qIndex];
+            if (q.concept) {
+                await DB.recordUnitExamSuccess(q.concept, q.category);
+            }
+        }
+
         currentTopicQuizCategory = null; 
     }
 
@@ -566,23 +580,65 @@ function renderCategoryReport() {
 function renderReview() {
     const list = document.getElementById('review-list');
     list.innerHTML = '';
-    
-    userAnswers.forEach((ans, idx) => {
-        if (!ans.isCorrect) {
+
+    const failed = userAnswers.filter(a => !a.isCorrect);
+
+    if (failed.length === 0) {
+        list.innerHTML = '<p style="text-align: center; color: var(--success); padding: 20px; font-weight: 800;">Perfect score! Nothing to review! 🏆</p>';
+    } else {
+        failed.forEach((ans, idx) => {
             const q = currentQuestions[ans.qIndex];
             const div = document.createElement('div');
-            div.className = 'review-item';
+            div.className = 'card';
+            div.style.marginBottom = '20px';
+            div.style.background = 'rgba(255, 255, 255, 0.02)';
+            div.style.borderLeft = '4px solid var(--error)';
+
+            let optionsHtml = '';
+            q.options.forEach(opt => {
+                const wasSelected = (ans.selectedAnswers || []).includes(opt.text);
+                const isCorrect = opt.isCorrect;
+                
+                let badge = '';
+                let style = 'padding: 10px; border-radius: 8px; margin-bottom: 8px; font-size: 0.9rem; border: 1px solid transparent; transition: all 0.3s;';
+                
+                if (wasSelected && isCorrect) {
+                     style += 'background: rgba(46, 204, 113, 0.15); border-color: var(--success); color: var(--success);';
+                     badge = ' <span style="font-size: 0.7rem; font-weight: 800;">[CORRECT CHOICE] ✅</span>';
+                } else if (wasSelected && !isCorrect) {
+                     style += 'background: rgba(231, 76, 60, 0.15); border-color: var(--error); color: var(--error);';
+                     badge = ' <span style="font-size: 0.7rem; font-weight: 800;">[YOUR INCORRECT CHOICE] ❌</span>';
+                } else if (!wasSelected && isCorrect) {
+                     style += 'background: rgba(255, 255, 255, 0.05); border-color: var(--warning); color: var(--warning);';
+                     badge = ' <span style="font-size: 0.7rem; font-weight: 800;">[THIS WAS ALSO CORRECT] ⚠️</span>';
+                } else {
+                     style += 'opacity: 0.5; color: var(--text-muted);';
+                }
+
+                optionsHtml += `<div style="${style}">${opt.text} ${badge}</div>`;
+            });
+
             div.innerHTML = `
-                <p style="font-weight: 700; margin-bottom: 8px;">${q.question}</p>
-                <div class="explanation-box" style="margin-bottom: 12px;">
-                    <strong>Explanation:</strong> ${q.explanation}
+                <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px; display: flex; justify-content: space-between;">
+                    <span>Topic: ${q.category || 'General'}</span>
+                    <span>Question ${ans.qIndex + 1}</span>
                 </div>
-                <!-- Tutor Chat for Review -->
-                <div class="card" style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 12px;">
-                    <div class="tutor-chat hidden" style="margin-bottom: 15px; padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.05); font-size: 0.85rem; text-align: left; max-height: 200px; overflow-y: auto;"></div>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="text" class="tutor-input" style="flex: 1; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px; color: var(--text-main); padding: 8px 12px; font-size: 0.85rem;" placeholder="Ask why this was wrong...">
-                        <button class="btn-outline tutor-ask-btn" style="padding: 8px 16px; font-size: 0.8rem;">Ask Tutor</button>
+                <h4 style="margin-bottom: 15px;">${q.question}</h4>
+                <div style="margin-bottom: 20px;">
+                    ${optionsHtml}
+                </div>
+                <div class="explanation-box" style="margin-top: 15px;">
+                    <strong>Explanation:</strong><br>
+                    ${q.explanation}
+                </div>
+
+                <!-- AI Tutor for this specific review item -->
+                <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 15px;">
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">Still confused? Ask the AI Tutor about this specific mistake:</p>
+                    <div class="tutor-chat hidden" style="margin-bottom: 12px; padding: 12px; border-radius: 8px; background: rgba(0,0,0,0.2); font-size: 0.9rem; max-height: 200px; overflow-y: auto;"></div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" class="tutor-input" placeholder="Why is Option A wrong?" style="flex:1; background:rgba(0,0,0,0.3); border:1px solid var(--border); color:white; padding:8px; border-radius:6px; font-size:0.9rem;">
+                        <button class="btn-outline tutor-ask-btn" style="padding:6px 12px; font-size:0.85rem;">Ask Tutor</button>
                     </div>
                 </div>
             `;
@@ -599,10 +655,9 @@ function renderReview() {
             };
 
             list.appendChild(div);
-        }
-    });
+        });
+    }
     
-    if (list.innerHTML === '') list.innerHTML = '<p class="text-center">No mistakes! You mastered this set perfectly. 🌟</p>';
     showView('review');
 }
 
@@ -694,6 +749,7 @@ setupBtn('prev-study-btn', () => {
 });
 setupBtn('study-next-btn', () => nextStudyCard(false));
 setupBtn('study-challenge-btn', startFlashcardChallenge);
+setupBtn('study-practice-btn', triggerPracticeChallenge);
 setupBtn('skip-study-btn', () => nextStudyCard(false));
 setupBtn('exit-study-btn', () => showView('home'));
 setupBtn('study-ask-btn', askFlashcardTutor);
@@ -714,20 +770,24 @@ async function askFlashcardTutor() {
  * GENERIC AI TUTOR LOGIC
  * Can be used for flashcards, post-exam review, or mistake bank
  */
-async function askTutor(query, context, chatElement, btnElement, inputElement) {
+async function askTutor(query, context, chatElement, btnElement, inputElement, showUserMsg = true) {
     btnElement.disabled = true;
     btnElement.textContent = "...";
     
     // UI Update
     chatElement.classList.remove('hidden');
-    const userMsg = document.createElement('div');
-    userMsg.style.marginBottom = '10px';
-    userMsg.innerHTML = `<strong style="color: var(--primary);">You:</strong> ${query}`;
-    chatElement.appendChild(userMsg);
-    if (inputElement) inputElement.value = '';
+    
+    if (showUserMsg) {
+        const userMsg = document.createElement('div');
+        userMsg.style.marginBottom = '10px';
+        userMsg.innerHTML = `<strong style="color: var(--primary);">You:</strong> ${query}`;
+        chatElement.appendChild(userMsg);
+        
+        // Scroll to bottom
+        chatElement.scrollTop = chatElement.scrollHeight;
+    }
 
-    // Scroll to bottom
-    chatElement.scrollTop = chatElement.scrollHeight;
+    if (inputElement) inputElement.value = '';
 
     // Manage Isolated History per question
     const historyId = context.id || context.question; // Use ID if available, fallback to question text
@@ -757,14 +817,24 @@ async function askTutor(query, context, chatElement, btnElement, inputElement) {
 
         const result = await evaluateMastery(query, normalizedUnit, currentHistory, 'study');
         
+        let feedbackContent = result.feedback || "The tutor is thinking, please try again.";
+        if (typeof feedbackContent === 'object') {
+            // Handle if AI returns a deeper JSON object for sections
+            feedbackContent = Object.entries(feedbackContent).map(([k, v]) => `<strong>${k.toUpperCase()}:</strong> ${v}`).join('<br><br>');
+        }
+        
+        // --- NEW: Markdown Cleanup (Double asterisks to <b>) ---
+        feedbackContent = feedbackContent.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+
         // Add to history
         currentHistory.push({ role: 'user', content: query });
-        currentHistory.push({ role: 'assistant', content: result.feedback });
+        currentHistory.push({ role: 'assistant', content: feedbackContent });
 
         // Add assistant reply to UI
         const assistantMsg = document.createElement('div');
-        assistantMsg.style.marginBottom = '10px';
-        assistantMsg.innerHTML = `<strong style="color: var(--warning);">Tutor:</strong> ${result.feedback}`;
+        assistantMsg.style.marginBottom = '15px';
+        assistantMsg.style.lineHeight = '1.5';
+        assistantMsg.innerHTML = `<strong style="color: var(--warning);">Tutor:</strong><br>${feedbackContent.replace(/\n/g, '<br>')}`;
         chatElement.appendChild(assistantMsg);
         
         // Scroll to bottom
@@ -851,6 +921,11 @@ function renderStudyCard() {
         <div>
             <strong style="color: var(--success);">ELI5 (Simple):</strong><br>
             <span style="font-style: italic; font-size: 0.9rem;">"${unit.flashcard.ELI5}"</span>
+        </div>
+        <div id="admin-blueprint-area" style="margin-top: 20px; padding-top: 15px; border-top: 1px dashed var(--border);">
+            <button class="btn-outline" style="width: 100%; font-size: 0.8rem; border-color: var(--warning); color: var(--warning);" onclick="triggerDeepDive(event)">
+                🧭 Unlock Admin Blueprint (Setup & Limits)
+            </button>
         </div>
     `;
 
@@ -977,6 +1052,48 @@ setupBtn('reset-stats', () => {
 loadDashboard();
 
 window.startTopicQuiz = startTopicQuiz;
+
+async function triggerDeepDive(event) {
+    const unit = masteryUnits[masteryIndex];
+    if (!unit) return;
+    const btn = event ? event.currentTarget || event.target : null;
+    const chat = document.getElementById('study-tutor-chat');
+    const input = document.getElementById('study-tutor-input');
+    
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "🧭 Exploring Technical Specs...";
+    }
+    
+    const query = "Generate the Full Administrative Blueprint for this concept. Be ULTRA CONCISE and SURGICAL. Use Arrow Path for Setup. Exactly 3 points for Workflow, 3 numbers for Limits. NO INTROS. NO CONCEPT SECTION. NO ASTERISKS (**).";
+    await askTutor(query, unit, chat, btn || {}, input, false);
+    
+    if (btn) {
+        btn.textContent = "🧭 Blueprint Unlocked!";
+    }
+}
+async function triggerPracticeChallenge(event) {
+    const unit = masteryUnits[masteryIndex];
+    if (!unit) return;
+    const btn = event ? event.currentTarget || event.target : null;
+    const chat = document.getElementById('study-tutor-chat');
+    const input = document.getElementById('study-tutor-input');
+    
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "🛠️ Designing Hands-on Task...";
+    }
+    
+    const query = "Generate a short, surgical 'Practice in your Org' challenge for this concept. Tell me EXACTLY what to build in my Salesforce Developer Edition to prove I master this. NO STEPS, just the REQUIREMENT. Keep it challenging but quick to verify.";
+    await askTutor(query, unit, chat, btn || {}, input, false);
+    
+    if (btn) {
+        btn.textContent = "🛠️ Practice Task Ready!";
+    }
+}
+window.triggerPracticeChallenge = triggerPracticeChallenge;
+
+window.triggerDeepDive = triggerDeepDive;
 
 window.showImageFull = (src) => {
     const modal = document.getElementById('image-modal');

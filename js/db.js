@@ -331,6 +331,29 @@ export async function recordUnitExamFailure(conceptString, category) {
     }
 }
 
+export async function recordUnitExamSuccess(conceptString, category) {
+    const colRef = collection(db, MASTERY_COL);
+    const conceptNames = conceptString.split(',').map(c => c.trim());
+    
+    for (const conceptName of conceptNames) {
+        const q = query(colRef, where("concept", "==", conceptName), where("category", "==", category));
+        let snapshot = await getDocs(q);
+        
+        if (snapshot.empty) {
+            const q2 = query(colRef, where("concept", "==", conceptName));
+            snapshot = await getDocs(q2);
+        }
+
+        if (!snapshot.empty) {
+            const docRef = doc(db, MASTERY_COL, snapshot.docs[0].id);
+            await updateDoc(docRef, {
+                examFailures: 0 // Success clears the counter
+            });
+            clearCache();
+        }
+    }
+}
+
 export async function updateCategoryHighScore(category, score, failedCount = 0) {
     const docRef = doc(db, CAT_SCORES_COL, category);
     const docSnap = await getDoc(docRef);
