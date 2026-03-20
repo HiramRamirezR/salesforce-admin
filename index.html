@@ -68,6 +68,23 @@
 
 
 
+                <!-- READINESS SCORE CARD -->
+                <div id="readiness-card" style="margin-top: 30px; padding: 20px; background: rgba(0, 161, 224, 0.05); border: 1px solid var(--primary); border-radius: 16px; margin-bottom: 30px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="font-size: 1.1rem; color: var(--primary);">Exam Readiness Score</h3>
+                        <span id="readiness-percentage" style="font-size: 1.8rem; font-weight: 800; color: var(--primary);">0%</span>
+                    </div>
+                    <div style="height: 12px; background: rgba(255,255,255,0.05); border-radius: 6px; overflow: hidden; margin-bottom: 20px; border: 1px solid var(--border);">
+                        <div id="readiness-progress" style="height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary), #00d2ff); transition: width 1s ease;"></div>
+                    </div>
+                    <p id="readiness-advice" style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+                        Calculating your chances of passing based on official topic weightings...
+                    </p>
+                    <div id="weighted-gap-actions" style="margin-top: 15px; display: flex; gap: 10px;">
+                        <!-- AI will inject focus buttons here -->
+                    </div>
+                </div>
+
                 <!-- PADRE FEATURE: Mastery Breakdown -->
                 <div id="mastery-section" style="margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border);">
                     <h3 style="margin-bottom: 16px; font-size: 1rem;">Topic Mastery Progress</h3>

@@ -52,7 +52,26 @@ exports.handler = async (event, context) => {
         "feedback": "Your Socratic response",
         "masteryIncrement": boolean (true ONLY if score == 100 and no previous history)
       }
+      }
       4. Language: English.
+    `;
+  } else if (mode === 'distractor_analysis') {
+    sysInstruction = `
+      You are a Salesforce Certification Coach. 
+      The user chose an INCORRECT option in a scenario-based question.
+      
+      TASK: 
+      1. CRACK THE TRAP: Identify why a student would pick the user's incorrect choice (what's the "trap"?).
+      2. ELIMINATION LOGIC: Explain the technical reason why it's wrong in 1-2 surgical sentences.
+      3. GUIDANCE: Remind the user of the "Rule of Thumb" for this specific Salesforce feature.
+      
+      Keep it brief, encouraging, and highly technical. No intro/outro.
+      Use <b>tags for emphasis.
+      
+      JSON OUTPUT:
+      {
+        "feedback": "Your surgical trap analysis..."
+      }
     `;
   } else if (mode === 'quiz_generation') {
     const topic = safeConcepts.length > 0 ? safeConcepts[0].category : "Salesforce";

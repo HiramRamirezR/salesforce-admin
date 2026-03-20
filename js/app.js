@@ -31,13 +31,13 @@ const views = {
 };
 
 const OFFICIAL_WEIGHTS = {
-    "Data Modeling and Management": 17,
-    "Configuration and Setup": 15,
-    "Object Manager and Lightning App Builder": 15,
+    "Data & Analytics Management": 17,
+    "Configuration & Setup": 15,
+    "Object Manager & Lightning App Builder": 15,
     "Automation": 15,
-    "Sales and Marketing Applications": 10,
-    "Service and Support Applications": 10,
-    "Productivity and Collaboration": 10,
+    "Sales & Marketing": 10,
+    "Service & Support": 10,
+    "Productivity & Collaboration": 10,
     "Agentforce AI": 8
 };
 
@@ -278,6 +278,9 @@ async function renderGlobalMastery() {
         weakBtn.onclick = (e) => startWeakTopicsQuiz(e);
         mixedHeader.appendChild(weakBtn);
     }
+
+    // NEW: Render Readiness Score
+    renderReadinessScore(masteryStats);
 }
 
 async function startTopicQuiz(event, topic) {
@@ -313,6 +316,58 @@ async function startWeakTopicsQuiz(event) {
 
     if (weakUnits.length === 0) return;
     return runQuizGeneration(btn, weakUnits, "Weak Concepts");
+}
+
+function renderReadinessScore(masteryStats) {
+    let totalScore = 0;
+    const gaps = [];
+
+    Object.keys(OFFICIAL_WEIGHTS).forEach(cat => {
+        const stats = masteryStats[cat] || { lastScore: null, highScore: 0 };
+        const weight = OFFICIAL_WEIGHTS[cat];
+        
+        // Priority: Use lastScore if it exists, otherwise use highScore
+        const quizScore = (stats.lastScore !== null && stats.lastScore !== undefined) ? stats.lastScore : (stats.highScore || 0);
+        
+        // Contribution: (Score / 100) * Weight
+        const contribution = (quizScore / 100) * weight;
+        totalScore += contribution;
+
+        if (quizScore < 80) {
+            // Impact gap calculation (how many points could you gain by reaching 80%)
+            const gapImpact = (80 - quizScore) * (weight / 100);
+            gaps.push({ category: cat, weight, score: quizScore, gap: gapImpact });
+        }
+    });
+
+    const roundedScore = Math.round(totalScore);
+    const progressEl = document.getElementById('readiness-progress');
+    const percentEl = document.getElementById('readiness-percentage');
+    const adviceEl = document.getElementById('readiness-advice');
+    const actionsEl = document.getElementById('weighted-gap-actions');
+
+    percentEl.textContent = `${roundedScore}%`;
+    progressEl.style.width = `${roundedScore}%`;
+    
+    // Color logic
+    if (roundedScore < 40) progressEl.style.background = 'linear-gradient(90deg, #e74c3c, #f39c12)';
+    else if (roundedScore < 70) progressEl.style.background = 'linear-gradient(90deg, #f1c40f, #2ecc71)';
+    else progressEl.style.background = 'linear-gradient(90deg, #2ecc71, #00a1e0)';
+
+    // Sort gaps by impact (gap in points)
+    gaps.sort((a, b) => b.gap - a.gap);
+
+    actionsEl.innerHTML = '';
+    const passThreshold = 65;
+    
+    if (roundedScore >= 80) {
+        adviceEl.innerHTML = `<b>Certified Ready!</b> Score: <b>${roundedScore}%</b> (Min: ${passThreshold}%). Your test scores across topics show high confidence.`;
+    } else if (roundedScore >= passThreshold) {
+        adviceEl.innerHTML = `Current Score: <b>${roundedScore}%</b>. You are <b>Above Passing</b>, but focus on <b>${gaps[0]?.category}</b> to ensure a safer margin.`;
+    } else if (gaps.length > 0) {
+        const topGap = gaps[0];
+        adviceEl.innerHTML = `Current Score: <b>${roundedScore}%</b> (Needs ${passThreshold}%). Focus on <b>${topGap.category}</b> to gain up to ${Math.round(topGap.gap)} points.`;
+    }
 }
 
 async function runQuizGeneration(btn, units, label) {
@@ -608,6 +663,7 @@ function renderReview() {
                 } else if (wasSelected && !isCorrect) {
                      style += 'background: rgba(231, 76, 60, 0.15); border-color: var(--error); color: var(--error);';
                      badge = ' <span style="font-size: 0.7rem; font-weight: 800;">[YOUR INCORRECT CHOICE] ❌</span>';
+                     badge += ` <button class="btn-outline trap-analyze-btn" style="padding:2px 6px; font-size:0.6rem; margin-left:10px; border-color:var(--error); color:var(--error);">💡 Analyze Trap</button>`;
                 } else if (!wasSelected && isCorrect) {
                      style += 'background: rgba(255, 255, 255, 0.05); border-color: var(--warning); color: var(--warning);';
                      badge = ' <span style="font-size: 0.7rem; font-weight: 800;">[THIS WAS ALSO CORRECT] ⚠️</span>';
@@ -615,7 +671,7 @@ function renderReview() {
                      style += 'opacity: 0.5; color: var(--text-muted);';
                 }
 
-                optionsHtml += `<div style="${style}">${opt.text} ${badge}</div>`;
+                optionsHtml += `<div class="review-option" data-text="${opt.text}" style="${style}">${opt.text} ${badge}</div>`;
             });
 
             div.innerHTML = `
@@ -627,9 +683,13 @@ function renderReview() {
                 <div style="margin-bottom: 20px;">
                     ${optionsHtml}
                 </div>
-                <div class="explanation-box" style="margin-top: 15px;">
-                    <strong>Explanation:</strong><br>
+                <div class="explanation-box" style="margin-top: 15px; background: rgba(0, 161, 224, 0.05); border-left-color: var(--primary);">
+                    <strong>Official Reasoning:</strong><br>
                     ${q.explanation}
+                </div>
+
+                <div class="trap-feedback hidden" style="margin-top: 15px; padding: 12px; border-radius: 8px; background: rgba(231, 76, 60, 0.05); border: 1px dashed var(--error); font-size: 0.9rem;">
+                    <!-- Trap analysis here -->
                 </div>
 
                 <!-- AI Tutor for this specific review item -->
@@ -653,6 +713,30 @@ function renderReview() {
                 if (!query) return;
                 askTutor(query, q, chat, btn, input);
             };
+
+            // Trap analysis logic
+            div.querySelectorAll('.trap-analyze-btn').forEach(trapBtn => {
+                trapBtn.onclick = async () => {
+                    const feedbackArea = div.querySelector('.trap-feedback');
+                    const optionText = trapBtn.closest('.review-option').dataset.text;
+                    const originalText = trapBtn.innerHTML;
+                    
+                    trapBtn.disabled = true;
+                    trapBtn.innerHTML = "🤔 Thinking...";
+                    feedbackArea.classList.remove('hidden');
+                    feedbackArea.innerHTML = "Analyzing why this was a trap...";
+
+                    try {
+                        const result = await evaluateMastery(optionText, q, [], 'distractor_analysis');
+                        feedbackArea.innerHTML = `<strong>Trap Analysis:</strong><br>${result.feedback || "Unable to analyze."}`;
+                    } catch (err) {
+                        feedbackArea.innerHTML = "Error analyzing trap.";
+                    } finally {
+                        trapBtn.disabled = false;
+                        trapBtn.innerHTML = originalText;
+                    }
+                };
+            });
 
             list.appendChild(div);
         });

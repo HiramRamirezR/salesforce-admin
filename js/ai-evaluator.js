@@ -10,18 +10,18 @@ export async function evaluateMastery(userAnswer, unit, history = [], mode = 'ma
             body: JSON.stringify({ userAnswer, unit, history, mode, concepts })
         });
 
+        const responseText = (await response.text()).trim();
+
         if (!response.ok) {
-            let errorMsg = "Server error";
+            let errorMsg = responseText || "Server error";
             try {
-                const errData = await response.json();
+                const errData = JSON.parse(responseText);
                 errorMsg = errData.error || errorMsg;
             } catch (jsonErr) {
-                errorMsg = await response.text() || errorMsg;
+                // If not JSON, use the raw responseText
             }
             throw new Error(errorMsg);
         }
-
-        const responseText = (await response.text()).trim();
         
         try {
             // Remove markdown code blocks if the AI included them
