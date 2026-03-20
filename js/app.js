@@ -770,7 +770,7 @@ async function askFlashcardTutor() {
  * GENERIC AI TUTOR LOGIC
  * Can be used for flashcards, post-exam review, or mistake bank
  */
-async function askTutor(query, context, chatElement, btnElement, inputElement, showUserMsg = true) {
+async function askTutor(query, context, chatElement, btnElement, inputElement, showUserMsg = true, reEnableBtn = true) {
     btnElement.disabled = true;
     btnElement.textContent = "...";
     
@@ -848,8 +848,10 @@ async function askTutor(query, context, chatElement, btnElement, inputElement, s
         errDiv.textContent = "Error: " + e.message;
         chatElement.appendChild(errDiv);
     } finally {
-        btnElement.disabled = false;
-        btnElement.textContent = "Ask Tutor";
+        if (reEnableBtn) {
+            btnElement.disabled = false;
+            btnElement.textContent = "Ask Tutor";
+        }
     }
 }
 
@@ -1066,10 +1068,12 @@ async function triggerDeepDive(event) {
     }
     
     const query = "Generate the Full Administrative Blueprint for this concept. Be ULTRA CONCISE and SURGICAL. Use Arrow Path for Setup. Exactly 3 points for Workflow, 3 numbers for Limits. NO INTROS. NO CONCEPT SECTION. NO ASTERISKS (**).";
-    await askTutor(query, unit, chat, btn || {}, input, false);
+    await askTutor(query, unit, chat, btn || {}, input, false, false);
     
     if (btn) {
         btn.textContent = "🧭 Blueprint Unlocked!";
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
     }
 }
 async function triggerPracticeChallenge(event) {
@@ -1085,10 +1089,12 @@ async function triggerPracticeChallenge(event) {
     }
     
     const query = "Generate a short, surgical 'Practice in your Org' challenge for this concept. Tell me EXACTLY what to build in my Salesforce Developer Edition to prove I master this. NO STEPS, just the REQUIREMENT. Keep it challenging but quick to verify.";
-    await askTutor(query, unit, chat, btn || {}, input, false);
+    await askTutor(query, unit, chat, btn || {}, input, false, false);
     
     if (btn) {
         btn.textContent = "🛠️ Practice Task Ready!";
+        btn.disabled = true;
+        btn.style.opacity = '0.6';
     }
 }
 window.triggerPracticeChallenge = triggerPracticeChallenge;
