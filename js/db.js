@@ -7,8 +7,8 @@ const db = getFirestore(app);
 
 // Collection Names
 const QUESTIONS_COL = "questions";
-const MASTERY_COL = "mastery_units"; 
-const STATS_COL = "stats"; 
+const MASTERY_COL = "mastery_units";
+const STATS_COL = "stats";
 const HISTORY_COL = "history";
 const CAT_SCORES_COL = "category_scores";
 
@@ -31,7 +31,7 @@ export function clearCache() {
 export async function saveQuestions(questionsArray) {
     const colRef = collection(db, QUESTIONS_COL);
     let count = 0;
-    
+
     // Get current batch count to increment it
     const statsRef = doc(db, STATS_COL, "global");
     const statsDoc = await getDoc(statsRef);
@@ -55,7 +55,7 @@ export async function saveQuestions(questionsArray) {
 
     // Update global batch count
     await setDoc(statsRef, { batchCount: nextBatch }, { merge: true });
-    
+
     return count;
 }
 
@@ -117,10 +117,10 @@ export async function getDashboardStats(category = 'all') {
         }
     });
 
-    return { 
-        total, 
-        mastered, 
-        batches: Math.ceil(total / 10) 
+    return {
+        total,
+        mastered,
+        batches: Math.ceil(total / 10)
     };
 }
 
@@ -159,7 +159,7 @@ export async function getCategoryPerformance() {
     const colRef = collection(db, QUESTIONS_COL);
     const querySnapshot = await getDocs(colRef);
     const performance = {};
-    
+
     querySnapshot.forEach(doc => {
         const data = doc.data();
         const cat = data.category || "General";
@@ -168,7 +168,7 @@ export async function getCategoryPerformance() {
         performance[cat].correct += (data.correctCount || 0);
         performance[cat].attempts += (data.attempts || 0);
     });
-    
+
     return performance;
 }
 
@@ -176,7 +176,7 @@ export async function getStrugglingQuestions() {
     const colRef = collection(db, QUESTIONS_COL);
     const querySnapshot = await getDocs(colRef);
     const struggling = [];
-    
+
     querySnapshot.forEach(doc => {
         const data = doc.data();
         // A question is struggling if attempts > 0 and masteryCount < 5
@@ -184,15 +184,23 @@ export async function getStrugglingQuestions() {
             struggling.push({ id: doc.id, ...data });
         }
     });
-    
+
     return struggling;
 }
 
 export async function updateStudyStats(secondsAdded) {
     const statsRef = doc(db, STATS_COL, "user_experience");
     const statsDoc = await getDoc(statsRef);
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+    // Use local date instead of UTC to avoid streak reset at midnight UTC
+    const getLocalYYYYMMDD = (date) => {
+        return date.toLocaleDateString('en-CA'); // en-CA gives YYYY-MM-DD reliably
+    };
+
+    const today = getLocalYYYYMMDD(new Date());
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterday = getLocalYYYYMMDD(yesterdayDate);
 
     let data = statsDoc.exists() ? statsDoc.data() : {
         streak: 0,
@@ -229,15 +237,24 @@ export async function updateStudyStats(secondsAdded) {
 export async function getExperienceStats() {
     const statsRef = doc(db, STATS_COL, "user_experience");
     const statsDoc = await getDoc(statsRef);
-    const today = new Date().toISOString().split('T')[0];
+
+    // Help calculate local daily stats
+    const getLocalYYYYMMDD = (date) => {
+        return date.toLocaleDateString('en-CA');
+    };
+
+    const today = getLocalYYYYMMDD(new Date());
 
     if (!statsDoc.exists()) return { streak: 0, timeToday: 0 };
 
     const data = statsDoc.data();
     const timeToday = (data.studyTimeByDate && data.studyTimeByDate[today]) ? data.studyTimeByDate[today] : 0;
-    
+
     // Check if streak is still valid (if not today or yesterday, it's 0)
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+    const yesterdayDate = new Date();
+    yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+    const yesterday = getLocalYYYYMMDD(yesterdayDate);
+
     let streak = data.streak || 0;
     if (data.lastStudyDate !== today && data.lastStudyDate !== yesterday) {
         streak = 0;
@@ -268,17 +285,17 @@ export async function saveMasteryUnits(units) {
 
 export async function getUnitsByTopic(topic) {
     const colRef = collection(db, MASTERY_COL);
-    const q = topic === 'all' 
+    const q = topic === 'all'
         ? query(colRef)
         : query(colRef, where("category", "==", topic));
-        
+
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 export async function updateUnitMastery(unitId, isMasteryPoint) {
     const docRef = doc(db, MASTERY_COL, unitId);
-    
+
     if (isMasteryPoint) {
         await updateDoc(docRef, {
             masteryProgress: 5,
@@ -309,12 +326,12 @@ export async function recordUnitExamFailure(conceptString, category) {
     const colRef = collection(db, MASTERY_COL);
     // Split by comma in case the AI combined multiple concepts
     const conceptNames = conceptString.split(',').map(c => c.trim());
-    
+
     for (const conceptName of conceptNames) {
         // Try exact match first
         const q = query(colRef, where("concept", "==", conceptName), where("category", "==", category));
         let snapshot = await getDocs(q);
-        
+
         // If not found, try a more flexible match
         if (snapshot.empty) {
             const q2 = query(colRef, where("concept", "==", conceptName));
@@ -334,11 +351,11 @@ export async function recordUnitExamFailure(conceptString, category) {
 export async function recordUnitExamSuccess(conceptString, category) {
     const colRef = collection(db, MASTERY_COL);
     const conceptNames = conceptString.split(',').map(c => c.trim());
-    
+
     for (const conceptName of conceptNames) {
         const q = query(colRef, where("concept", "==", conceptName), where("category", "==", category));
         let snapshot = await getDocs(q);
-        
+
         if (snapshot.empty) {
             const q2 = query(colRef, where("concept", "==", conceptName));
             snapshot = await getDocs(q2);
@@ -356,29 +373,14 @@ export async function recordUnitExamSuccess(conceptString, category) {
 
 export async function updateCategoryHighScore(category, score, failedCount = 0) {
     const docRef = doc(db, CAT_SCORES_COL, category);
-    const docSnap = await getDoc(docRef);
-    
-    const updates = { 
-        failedCount: increment(failedCount)
-    };
-    
-    if (typeof score === 'number') {
-        updates.lastScore = score;
-    }
 
-    if (docSnap.exists()) {
-        const currentHigh = docSnap.data().highScore || 0;
-        if (typeof score === 'number' && score > currentHigh) {
-            updates.highScore = score;
-        }
-        await updateDoc(docRef, updates);
-    } else {
-        await setDoc(docRef, { 
-            highScore: typeof score === 'number' ? score : 0, 
-            lastScore: typeof score === 'number' ? score : 0, 
-            failedCount: failedCount 
-        });
-    }
+    const updates = {
+        lastScore: score,
+        highScore: score, // UI consistency
+        lastQuizDate: Date.now() // For 20% decay per day
+    };
+
+    await setDoc(docRef, updates, { merge: true });
 }
 
 async function getCategoryScores() {
@@ -409,17 +411,17 @@ export async function getExamMasteryProgress() {
     const progress = {
         _mixed_: scoresData["Mixed Mastery"] || { lastScore: null, failedCount: 0 }
     };
-    
+
     Object.keys(OFFICIAL_WEIGHTS).forEach(cat => {
         const catData = scoresData[cat] || { highScore: 0, lastScore: null, failedCount: 0 };
-        progress[cat] = { 
-            total: 0, 
-            mastered: 0, 
-            weight: OFFICIAL_WEIGHTS[cat], 
-            units: [], 
-            highScore: catData.highScore, 
+        progress[cat] = {
+            total: 0,
+            mastered: 0,
+            weight: OFFICIAL_WEIGHTS[cat],
+            units: [],
+            highScore: catData.highScore,
             lastScore: catData.lastScore,
-            failedCount: catData.failedCount || 0 
+            failedCount: catData.failedCount || 0
         };
     });
 
@@ -437,7 +439,7 @@ export async function getExamMasteryProgress() {
             });
         }
     });
-    
+
     return progress;
 }
 

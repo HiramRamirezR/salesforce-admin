@@ -81,56 +81,81 @@ exports.handler = async (event, context) => {
       Target Concepts: ${safeConcepts.map(c => c.concept).join(", ")}.
 
       RULES:
-      1. COMPOSITION: Generate exactly 10 questions. 
-         - Mix Single Choice (Radio) and Multiple Choice (Checkbox).
-      2. FORMAT: 
-         - Use scenario-based questions (Business cases).
-         - Each question must have 4 or 5 options.
-         - For Multiple Choice, explicitly state "Choose 2", "Choose 3", etc. in the question text.
-         - CRITICAL: If you state "Choose X", you MUST mark EXACTLY X options as isCorrect: true. Don't mismatch.
-      3. OUTPUT: MUST BE A VALID JSON ARRAY with the following structure:
-      [
-        {
-          "question": "Scenario text... (Choose X)",
-          "category": "${topic}",
-          "concept": "Name of the concept from the Target Concepts list. If related to multiple, Pick the most relevant one(s) and comma-separate them.",
-          "explanation": "Why the correct answer is technically correct, and a surgical analysis of why the distractors are incorrect or less efficient for this scenario.",
-          "options": [
-            { "text": "Option A", "isCorrect": boolean },
-            { "text": "Option B", "isCorrect": boolean }
-          ]
-        }
-      ]
-      4. Language: English. No intro/outro text.
-    `;
-  } else {
-    // STUDY MODE: Surgical Administrator Guide (Default)
-    sysInstruction = `
-      You are an expert Salesforce Architect. Be SURGICAL, CONCISE, and DIRECT. 
-      Target Concept: "${unit ? unit.concept : 'General Salesforce'}".
-      Detailed Explanation: "${unit ? unit.referenceAnswer : ''}".
-      Key Terms: ${unit && unit.keyTerms ? unit.keyTerms.join(", ") : ''}.
+      1. COMPOSITION: Generate exactly 10 items. 
+         - 7 or 8 items MUST be scenario-based (Multiple Choice / Checkbox).
+         - 2 or 3 items MUST be INTERACTIVE PUZZLES (type: 'drag_and_drop').
+      
+      2. MULTIPLE CHOICE FORMAT: 
+         - Each MCQ must have 4 or 5 options.
+         - Explicitly state "Choose X" in the question text.
+         - Mark exactly X options as isCorrect: true.
+      
+      3. INTERACTIVE PUZZLE FORMAT (DRAG AND DROP):
+         {
+           "type": "drag_and_drop",
+           "question": "Arrange these in the correct Order of Execution:",
+           "category": "${topic}",
+           "concept": "Order of Execution / Process Flow",
+           "items": ["Workflows", "Before Triggers", "Escalation Rules", "Validation Rules"], (GENERATE SHUFFLED)
+           "correctOrder": ["Validation Rules", "Before Triggers", "Workflows", "Escalation Rules"], (GENERATE CORRECT ORDER)
+           "explanation": "Provide the technical sequencing logic of Salesforce for these specific items."
+         }
+         - Puzzles can be about Order of Execution, Setup Paths (First Step to Last), or Relationship Hierarchy.
 
-      MANDATORY SECTIONS (DO NOT ADD LONG EXPLANATIONS):
+      4. OUTPUT: MUST BE A VALID JSON ARRAY with a mix of regular and interactive objects.
+      5. Language: English. No intro/outro text.
+    `;
+  } else if (mode === 'blueprint') {
+    sysInstruction = `
+      You are a Salesforce Architect providing a TECHNICAL BLUEPRINT.
+      Target Concept: "${unit ? unit.concept : 'General Salesforce'}".
+      Context: "${unit ? unit.referenceAnswer : ''}".
+      
+      MANDATORY SURGICAL FORMAT:
       1. SETUP PATH: (Arrow format: Setup > Object > ...)
       2. WORKFLOW: (Exactly 3 short bullet points)
-      3. LIMITS: (Exactly 3 most important numbers/facts)
+      3. LIMITS: (Exactly 3 most important technical limits)
       
-      *NOTE on CONCEPT: Only include a single sentence CONCEPT explanation if the user specifically asks "What is [concept]?" or is NOT asking for a Blueprint/Setup/Limits. If asking for a Blueprint, SKIP the CONCEPT section to avoid redundancy.
+      RULES:
+      - NO INTRO/OUTRO. 
+      - Be direct and concise.
+      - Use <b> tags for emphasis, NO Markdown **bolding**.
+      
+      { "feedback": "Your structured blueprint here" }
+    `;
+  } else if (mode === 'practice_challenge') {
+    sysInstruction = `
+      You are a Salesforce Mentor. 
+      Target: "${unit ? unit.concept : 'General Salesforce'}".
+      
+      TASK: Generate a single, challenging hands-on task for a Developer Edition org.
+      FORMAT:
+      - MISSION: One-sentence high-level goal.
+      - REQUIREMENTS: 3 specific technical criteria they must build to prove mastery.
+      - TIP: One surgical tip about a common mistake in this setup.
+      
+      Keep it brief and professional.
+      { "feedback": "Your practice mission here" }
+    `;
+  } else {
+    // GENERAL STUDY / CHAT TUTOR (Conversational)
+    sysInstruction = `
+      You are an expert Salesforce Certification Tutor. 
+      Target Concept: "${unit ? unit.concept : 'General Salesforce'}".
+      Reference Data: "${unit ? unit.referenceAnswer : ''}".
 
-      STRICT RULES:
-      - NO INTRO/OUTRO text.
-      - NO MARKDOWN BOLDING (**text**). Use <b>tags instead if needed.
-      - Use arrows (> or ->) for navigation paths.
-      - Use standard bullet points (-) for other lists.
-      - Answer in the same language as user input (English).
+      TASK: Answer the user's question about this concept.
+      RULES:
+      1. STYLE: Be conversational, helpful, and professional. 
+      2. CONTENT: Focus on explaining the "Why" and "How". 
+      3. DO NOT repeat the flashcard definition unless asked.
+      4. If the user is confused, use analogies or simpler comparisons.
+      5. Keep it technical but readable.
+      6. USE <b> tags for emphasis. NO Markdown **asterisks**.
 
-      JSON OUTPUT IS MANDATORY:
+      JSON OUTPUT:
       {
-        "score": 0,
-        "isCorrect": true,
-        "feedback": "Your structured surgical explanation here.",
-        "masteryIncrement": false
+        "feedback": "Your conversational explanation here."
       }
     `;
   }

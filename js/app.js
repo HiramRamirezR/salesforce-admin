@@ -163,8 +163,8 @@ async function renderGlobalMastery() {
         const isLoaded = stats.total > 0;
         
         if (masteryPerc === 100) masteredTopics.push(cat);
-        const hasUnitFailures = stats.units.some(u => u.examFailures > 0);
-        const showRedDot = masteryPerc === 100 && hasUnitFailures;
+        const totalFailures = stats.units.filter(u => u.examFailures > 0).length;
+        const showRedDot = totalFailures > 0;
         
         const wrapper = document.createElement('div');
         wrapper.style.marginBottom = '12px';
@@ -177,8 +177,12 @@ async function renderGlobalMastery() {
                 <span>
                     <strong>${cat}</strong> 
                     <span style="color: var(--text-muted); font-size: 0.75rem;">(Weight: ${stats.weight || 0}%)</span>
-                    ${stats.highScore > 0 ? `<span style="margin-left:8px; display: inline-block; padding: 2px 6px; background: rgba(0, 161, 224, 0.1); border: 1px solid var(--primary); border-radius: 4px; font-size: 0.6rem; color: var(--primary); font-weight: 800;">TOP: ${stats.highScore}%</span>` : ''}
-                    ${showRedDot ? `<span style="margin-left: 8px; color: var(--error); font-size: 0.8rem;" title="False Mastery: Failures in Exams">🔴</span>` : ''}
+                    ${stats.lastScore !== null && stats.lastScore !== undefined ? (() => {
+                        const decayed = calculateDecayedScore(stats.lastScore, stats.lastQuizDate);
+                        const isCooled = decayed < stats.lastScore;
+                        return `<span style="margin-left:8px; display: inline-block; padding: 2px 6px; background: ${isCooled ? 'rgba(231, 76, 60, 0.1)' : 'rgba(0, 161, 224, 0.1)'}; border: 1px solid ${isCooled ? 'var(--error)' : 'var(--primary)'}; border-radius: 4px; font-size: 0.6rem; color: ${isCooled ? 'var(--error)' : 'var(--primary)'}; font-weight: 800;" title="${isCooled ? 'Knowledge is cooling off! Retake exam.' : 'Fresh Knowledge'}">${isCooled ? '📉 ' : ''}SCORE: ${decayed}%</span>`;
+                    })() : ''}
+                    ${showRedDot ? `<span style="margin-left: 8px; color: var(--error); font-size: 0.8rem; font-weight: 800;" title="${totalFailures} failed concepts in this topic">🔴 ${totalFailures}</span>` : ''}
                 </span>
                 <span style="color: var(--warning); font-weight: 700;">${masteryPerc}% Mastered</span>
             </div>
@@ -317,17 +321,28 @@ async function startWeakTopicsQuiz(event) {
     if (weakUnits.length === 0) return;
     return runQuizGeneration(btn, weakUnits, "Weak Concepts");
 }
+function calculateDecayedScore(baseScore, lastDate) {
+    if (!lastDate || !baseScore) return baseScore || 0;
+    const msPerDay = 24 * 60 * 60 * 1000;
+    const daysPassed = Math.floor((Date.now() - lastDate) / msPerDay);
+    if (daysPassed <= 0) return baseScore;
+    
+    const decay = 20 * daysPassed;
+    const final = Math.max(0, baseScore - decay);
+    return final;
+}
 
 function renderReadinessScore(masteryStats) {
     let totalScore = 0;
     const gaps = [];
 
     Object.keys(OFFICIAL_WEIGHTS).forEach(cat => {
-        const stats = masteryStats[cat] || { lastScore: null, highScore: 0 };
+        const stats = masteryStats[cat] || { lastScore: null, highScore: 0, lastQuizDate: null };
         const weight = OFFICIAL_WEIGHTS[cat];
         
-        // Priority: Use lastScore if it exists, otherwise use highScore
-        const quizScore = (stats.lastScore !== null && stats.lastScore !== undefined) ? stats.lastScore : (stats.highScore || 0);
+        // Priority: Use lastScore with DECAY applied
+        const base = (stats.lastScore !== null && stats.lastScore !== undefined) ? stats.lastScore : (stats.highScore || 0);
+        const quizScore = calculateDecayedScore(base, stats.lastQuizDate);
         
         // Contribution: (Score / 100) * Weight
         const contribution = (quizScore / 100) * weight;
@@ -383,7 +398,8 @@ async function runQuizGeneration(btn, units, label) {
 
         const result = await evaluateMastery(null, null, [], 'quiz_generation', { concepts: pool });
         if (Array.isArray(result)) {
-            currentQuestions = result;
+            // SHUFFLE to interleave multiple choice and interactive questions
+            currentQuestions = result.sort(() => 0.5 - Math.random());
             currentIndex = 0;
             userAnswers = [];
             
@@ -453,6 +469,16 @@ function startTimer() {
 
 function renderQuestion() {
     const q = currentQuestions[currentIndex];
+    const interactiveArea = document.getElementById('interactive-area');
+    const optionsContainer = document.getElementById('q-options');
+    interactiveArea.classList.add('hidden');
+    optionsContainer.classList.remove('hidden');
+
+    if (q.type === 'interactive' || q.type === 'drag_and_drop') {
+        renderInteractiveQuestion(q);
+        return;
+    }
+
     const isMultiple = q.options.filter(o => o.isCorrect).length > 1;
     
     document.getElementById('q-category').textContent = q.category || "General";
@@ -469,7 +495,6 @@ function renderQuestion() {
         imgContainer.classList.add('hidden');
     }
 
-    const optionsContainer = document.getElementById('q-options');
     optionsContainer.innerHTML = '';
 
     // Shuffle options al vuelo as requested
@@ -500,11 +525,26 @@ function toggleOption(ele, opt, isMultiple) {
 }
 
 async function validateAnswer(isMultiple) {
+    const q = currentQuestions[currentIndex];
+    const nextBtn = document.getElementById('next-q-btn');
+    
+    if (q.type === 'interactive' || q.type === 'drag_and_drop') {
+        validateInteractiveAnswer(q);
+        nextBtn.textContent = currentIndex === currentQuestions.length - 1 ? "Finish Exam" : "Next Question";
+        nextBtn.onclick = () => {
+            if (currentIndex < currentQuestions.length - 1) {
+                currentIndex++;
+                renderQuestion();
+            } else {
+                endExam();
+            }
+        };
+        return;
+    }
+
     const selectedElements = document.querySelectorAll('.option-item.selected');
     if (selectedElements.length === 0) return;
 
-    const q = currentQuestions[currentIndex];
-    const mode = 'standard';
     const correctAnswers = q.options.filter(o => o.isCorrect).map(o => o.text);
     const selectedAnswers = Array.from(selectedElements).map(el => el.querySelector('span').textContent);
 
@@ -524,7 +564,6 @@ async function validateAnswer(isMultiple) {
         selectedAnswers: selectedAnswers 
     });
 
-
     // Update Live Stats
     updateLiveStats();
 
@@ -532,10 +571,6 @@ async function validateAnswer(isMultiple) {
     if (q.id) {
         await DB.updateMastery(q.id, isCorrect);
     }
-
-
-
-    const nextBtn = document.getElementById('next-q-btn');
 
     nextBtn.textContent = currentIndex === currentQuestions.length - 1 ? "Finish Exam" : "Next Question";
     nextBtn.onclick = () => {
@@ -650,29 +685,38 @@ function renderReview() {
             div.style.borderLeft = '4px solid var(--error)';
 
             let optionsHtml = '';
-            q.options.forEach(opt => {
-                const wasSelected = (ans.selectedAnswers || []).includes(opt.text);
-                const isCorrect = opt.isCorrect;
-                
-                let badge = '';
-                let style = 'padding: 10px; border-radius: 8px; margin-bottom: 8px; font-size: 0.9rem; border: 1px solid transparent; transition: all 0.3s;';
-                
-                if (wasSelected && isCorrect) {
-                     style += 'background: rgba(46, 204, 113, 0.15); border-color: var(--success); color: var(--success);';
-                     badge = ' <span style="font-size: 0.7rem; font-weight: 800;">[CORRECT CHOICE] ✅</span>';
-                } else if (wasSelected && !isCorrect) {
-                     style += 'background: rgba(231, 76, 60, 0.15); border-color: var(--error); color: var(--error);';
-                     badge = ' <span style="font-size: 0.7rem; font-weight: 800;">[YOUR INCORRECT CHOICE] ❌</span>';
-                     badge += ` <button class="btn-outline trap-analyze-btn" style="padding:2px 6px; font-size:0.6rem; margin-left:10px; border-color:var(--error); color:var(--error);">💡 Analyze Trap</button>`;
-                } else if (!wasSelected && isCorrect) {
-                     style += 'background: rgba(255, 255, 255, 0.05); border-color: var(--warning); color: var(--warning);';
-                     badge = ' <span style="font-size: 0.7rem; font-weight: 800;">[THIS WAS ALSO CORRECT] ⚠️</span>';
-                } else {
-                     style += 'opacity: 0.5; color: var(--text-muted);';
-                }
+            if (q.type === 'drag_and_drop' || q.type === 'interactive') {
+                optionsHtml = `
+                    <div style="padding: 10px; border: 1px dashed var(--warning); border-radius: 8px; color: var(--warning); font-size: 0.9rem;">
+                        <strong>Correct Sequence:</strong><br>
+                        ${(q.correctOrder || []).join(' > ')}
+                    </div>
+                `;
+            } else if (q.options) {
+                q.options.forEach(opt => {
+                    const wasSelected = (ans.selectedAnswers || []).includes(opt.text);
+                    const isCorrect = opt.isCorrect;
+                    
+                    let badge = '';
+                    let style = 'padding: 10px; border-radius: 8px; margin-bottom: 8px; font-size: 0.9rem; border: 1px solid transparent; transition: all 0.3s;';
+                    
+                    if (wasSelected && isCorrect) {
+                         style += 'background: rgba(46, 204, 113, 0.15); border-color: var(--success); color: var(--success);';
+                         badge = ' <span style="font-size: 0.7rem; font-weight: 800;">[CORRECT CHOICE] ✅</span>';
+                    } else if (wasSelected && !isCorrect) {
+                         style += 'background: rgba(231, 76, 60, 0.15); border-color: var(--error); color: var(--error);';
+                         badge = ' <span style="font-size: 0.7rem; font-weight: 800;">[YOUR INCORRECT CHOICE] ❌</span>';
+                         badge += ` <button class="btn-outline trap-analyze-btn" style="padding:2px 6px; font-size:0.6rem; margin-left:10px; border-color:var(--error); color:var(--error);">💡 Analyze Trap</button>`;
+                    } else if (!wasSelected && isCorrect) {
+                         style += 'background: rgba(255, 255, 255, 0.05); border-color: var(--warning); color: var(--warning);';
+                         badge = ' <span style="font-size: 0.7rem; font-weight: 800;">[THIS WAS ALSO CORRECT] ⚠️</span>';
+                    } else {
+                         style += 'opacity: 0.5; color: var(--text-muted);';
+                    }
 
-                optionsHtml += `<div class="review-option" data-text="${opt.text}" style="${style}">${opt.text} ${badge}</div>`;
-            });
+                    optionsHtml += `<div class="review-option" data-text="${opt.text}" style="${style}">${opt.text} ${badge}</div>`;
+                });
+            }
 
             div.innerHTML = `
                 <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px; display: flex; justify-content: space-between;">
@@ -854,7 +898,7 @@ async function askFlashcardTutor() {
  * GENERIC AI TUTOR LOGIC
  * Can be used for flashcards, post-exam review, or mistake bank
  */
-async function askTutor(query, context, chatElement, btnElement, inputElement, showUserMsg = true, reEnableBtn = true) {
+async function askTutor(query, context, chatElement, btnElement, inputElement, showUserMsg = true, reEnableBtn = true, modeOverride = 'study') {
     btnElement.disabled = true;
     btnElement.textContent = "...";
     
@@ -899,7 +943,7 @@ async function askTutor(query, context, chatElement, btnElement, inputElement, s
             };
         }
 
-        const result = await evaluateMastery(query, normalizedUnit, currentHistory, 'study');
+        const result = await evaluateMastery(query, normalizedUnit, currentHistory, modeOverride);
         
         let feedbackContent = result.feedback || "The tutor is thinking, please try again.";
         if (typeof feedbackContent === 'object') {
@@ -1152,7 +1196,7 @@ async function triggerDeepDive(event) {
     }
     
     const query = "Generate the Full Administrative Blueprint for this concept. Be ULTRA CONCISE and SURGICAL. Use Arrow Path for Setup. Exactly 3 points for Workflow, 3 numbers for Limits. NO INTROS. NO CONCEPT SECTION. NO ASTERISKS (**).";
-    await askTutor(query, unit, chat, btn || {}, input, false, false);
+    await askTutor(query, unit, chat, btn || {}, input, false, false, 'blueprint');
     
     if (btn) {
         btn.textContent = "🧭 Blueprint Unlocked!";
@@ -1173,7 +1217,7 @@ async function triggerPracticeChallenge(event) {
     }
     
     const query = "Generate a short, surgical 'Practice in your Org' challenge for this concept. Tell me EXACTLY what to build in my Salesforce Developer Edition to prove I master this. NO STEPS, just the REQUIREMENT. Keep it challenging but quick to verify.";
-    await askTutor(query, unit, chat, btn || {}, input, false, false);
+    await askTutor(query, unit, chat, btn || {}, input, false, false, 'practice_challenge');
     
     if (btn) {
         btn.textContent = "🛠️ Practice Task Ready!";
@@ -1344,3 +1388,108 @@ setupBtn('mp-give-up-btn', () => {
 });
 
 setupBtn('mp-retry-btn', renderMasteryScenario);
+
+// --- INTERACTIVE PUZZLE ENGINE ---
+
+function renderInteractiveQuestion(q) {
+    const area = document.getElementById('interactive-area');
+    const qText = document.getElementById('q-text');
+    const qCat = document.getElementById('q-category');
+    const nextBtn = document.getElementById('next-q-btn');
+
+    area.classList.remove('hidden');
+    document.getElementById('q-options').classList.add('hidden');
+
+    qText.textContent = q.question;
+    qCat.textContent = q.category || "Interactive Strategy";
+    
+    // Sortable items
+    if (!q._items) q._items = [...q.items]; // Keep track of current order in state
+    const currentItems = q._items;
+
+    area.innerHTML = `
+        <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 20px;">
+            <i class="fas fa-info-circle"></i> Click an item to select it, then click another to swap positions. Put them in order!
+        </p>
+        <div id="dnd-list" style="display: flex; flex-direction: column; gap: 10px;">
+            ${currentItems.map((item, idx) => `
+                <div class="dnd-item" data-index="${idx}" style="padding: 15px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 12px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 25px; height: 25px; background: var(--card-bg); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 800; color: var(--primary);">${idx + 1}</div>
+                    <span class="item-text" style="flex: 1; font-weight: 500;">${item}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+
+    let selectedIdx = null;
+    area.querySelectorAll('.dnd-item').forEach(el => {
+        el.onclick = () => {
+            const idx = parseInt(el.dataset.index);
+            if (selectedIdx === null) {
+                selectedIdx = idx;
+                el.style.borderColor = 'var(--primary)';
+                el.style.background = 'rgba(0, 161, 224, 0.1)';
+                el.style.transform = 'scale(1.02)';
+            } else if (selectedIdx === idx) {
+                selectedIdx = null;
+                el.style.borderColor = 'var(--border)';
+                el.style.background = 'rgba(255,255,255,0.03)';
+                el.style.transform = 'scale(1)';
+            } else {
+                // Swap
+                const temp = q._items[selectedIdx];
+                q._items[selectedIdx] = q._items[idx];
+                q._items[idx] = temp;
+                
+                selectedIdx = null;
+                renderInteractiveQuestion(q);
+            }
+        };
+    });
+
+    nextBtn.textContent = "Check Order";
+    nextBtn.onclick = () => validateAnswer();
+}
+
+function validateInteractiveAnswer(q) {
+    const currentOrder = q._items;
+    const correctOrder = q.correctOrder;
+    
+    const isCorrect = JSON.stringify(currentOrder) === JSON.stringify(correctOrder);
+    
+    // UI Feedback in the area
+    const area = document.getElementById('interactive-area');
+    area.querySelectorAll('.dnd-item').forEach((el, idx) => {
+        el.style.pointerEvents = 'none';
+        if (currentOrder[idx] === correctOrder[idx]) {
+            el.style.borderColor = 'var(--success)';
+            el.style.background = 'rgba(46, 204, 113, 0.1)';
+        } else {
+            el.style.borderColor = 'var(--error)';
+            el.style.background = 'rgba(231, 76, 60, 0.1)';
+        }
+    });
+
+    const explanation = document.createElement('div');
+    explanation.className = 'explanation-box';
+    explanation.style.marginTop = '25px';
+    explanation.innerHTML = `
+        <h4 style="color: ${isCorrect ? 'var(--success)' : 'var(--error)'}; margin-bottom: 15px;">
+            ${isCorrect ? '🎯 Perfect Execution! (100%)' : '🚨 Sequence Error!'}
+        </h4>
+        <div style="font-size: 0.9rem; line-height: 1.6;">
+            <strong>Reasoning:</strong><br>
+            ${q.explanation}
+        </div>
+    `;
+    area.appendChild(explanation);
+
+    userAnswers.push({
+        qIndex: currentIndex,
+        isCorrect,
+        explanation: q.explanation,
+        selectedAnswers: ["Interactive Sort: " + currentOrder.join(' > ')]
+    });
+
+    updateLiveStats();
+}
